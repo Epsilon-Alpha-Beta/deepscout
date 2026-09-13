@@ -93,4 +93,13 @@ def route_after_citation_verifier(state: DeepScoutState) -> str:
     budget = state["budget"]
     if report.requires_research and budget.can_replan:
         return "planner"
+    return "human_review"
+
+
+def route_after_human_review(state: DeepScoutState) -> str:
+    """Route a human revision request back to planning when budget permits."""
+    review = state["human_review"]
+    budget = state["budget"]
+    if review.action == "revise" and budget.can_replan:
+        return "planner"
     return "end"

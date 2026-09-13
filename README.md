@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.3.0 / Phase 3 第一批**：在 Research DAG、Evidence/Citation 与预算控制之上，
-> 新增统一 Tool Registry、MCP 工具接入、可注入 LangGraph Checkpointer 和节点级 RetryPolicy。
-> HITL、FastAPI/SSE 与更完整的生产部署能力将在 Phase 3 后续批次继续实现。
+> 当前版本为 **v0.3.1 / Phase 3 第二批**：在 MCP、Checkpoint 与 Retry 基础设施之上，
+> 新增 HITL 人工审核、FastAPI + SSE 服务层，并完成 PostgreSQL Checkpoint 的真实跨进程恢复验证。
+> 真实 MCP Server 与真实 LLM Provider 端到端研究仍保留为后续联调项。
 
 ## 系统架构
 
@@ -55,9 +55,13 @@ researcher ...      researcher             |
                      v                     |
              citation_verifier             |
                  /       \                 |
-          evidence gap     supported       |
+          evidence gap     sufficient       |
                |               |           |
-               +---------------+---------->END
+            planner       human_review      |
+                              /   \         |
+                           revise approve    |
+                              |     |        |
+                              +-----+------->END
 ```
 
 核心设计原则是：
@@ -131,6 +135,24 @@ Analyzer、Planner、Critic、Writer 和 Citation Verifier 使用 LangGraph 原�
 
 命令行支持 `--checkpoint none|memory|postgres` 与 `--thread-id`。PostgreSQL DSN 可以通过 `--postgres-dsn` 或 `DEEPSCOUT_POSTGRES_DSN` 提供。
 
+## Phase 3 第二批已实现能力
+
+### 1. HITL 人工审核
+
+Citation Verifier 之后增加 Human Review Gate。启用 `require_approval` 时，Graph 使用 LangGraph `interrupt()` 持久化暂停，并通过同一 `thread_id` 下的 `Command(resume=...)` 接收 `approve` 或 `revise`。`revise` 会转换为新的 Critique，在预算允许时回到 Planner。
+
+### 2. FastAPI + SSE 服务层
+
+新增 JSON 与 SSE API，支持创建研究任务、流式更新、查询 thread state，以及对暂停任务执行 resume。API 默认使用 Memory Checkpointer，也可通过配置切换 PostgreSQL。
+
+### 3. PostgreSQL 跨进程耐久恢复
+
+已使用临时 PostgreSQL 16 实例真实验证：进程 A 在 Human Review 处 `interrupt` 后退出，进程 B 重新创建 Python 进程与 PostgreSQL 连接，再使用相同 `thread_id` + `Command(resume=...)` 成功恢复到 END。严格 `LANGGRAPH_STRICT_MSGPACK=true` 模式下也验证通过。
+
+### 4. Checkpoint 序列化白名单
+
+PostgreSQL 与 Memory Checkpointer 使用显式 `JsonPlusSerializer` 白名单，仅允许 DeepScout Graph State 中需要持久化的模型模块进行 MsgPack 反序列化，避免依赖 LangGraph 当前的宽松兼容模式。
+
 ## 安装与环境
 
 要求：Python 3.11+、`uv`、至少一个受支持的 LLM Provider API Key，以及 Tavily API Key。
@@ -160,21 +182,26 @@ uv run python scripts/run_research.py \
 # 开启进程内 checkpoint
 uv run python scripts/run_research.py --checkpoint memory --thread-id demo-001 \
   "研究长运行 Agent 的故障恢复机制。"
+
+# 启动 FastAPI/SSE 服务
+uv run python scripts/run_api.py
 ```
 
 ## 当前验证状态
 
-Phase 3 第一批当前代码已在项目隔离环境中完成本地验证：
+Phase 3 第二批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：29/29 通过；
+- `pytest`：39/39 通过；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
-- GitHub Actions：Install、Ruff、Tests 全部通过。
+- PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
+- FastAPI/HITL：真实 InMemorySaver interrupt/resume 集成测试通过；
+- GitHub Actions：CI 在每次 push 后执行 Install、Ruff、Tests；远端结果以当前提交对应的 workflow run 为准。
 
 ## 后续路线
 
-**Phase 3 后续**：HITL、FastAPI + SSE、生产级 PostgreSQL 联调与端到端故障恢复测试。
+**Phase 3 后续**：真实 MCP Server、真实 LLM Provider 端到端联调，以及更完整的部署/认证/限流/可观测性。
 
 **Phase 4**：Benchmark 数据集、轨迹级评测、消融实验、成本/延迟/质量指标与可视化。

@@ -1,0 +1,155 @@
+"""FastAPI service for DeepScout research execution."""
+
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any
+from uuid import uuid4
+
+from fastapi import FastAPI
+from fastapi.sse import EventSourceResponse, ServerSentEvent
+from langgraph.types import Command
+from pydantic import BaseModel
+
+from deepscout.api.runtime import api_graph_runtime
+from deepscout.api.schemas import (
+    ResearchRequest,
+    ResearchResponse,
+    ResumeRequest,
+    ThreadStateResponse,
+)
+from deepscout.models.hitl import HumanReview
+
+
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, BaseModel):
+        return _jsonable(value.model_dump(mode="json"))
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if hasattr(value, "value") and hasattr(value, "id"):
+        return {"value": _jsonable(value.value), "id": str(value.id)}
+    return str(value)
+
+
+def _config(thread_id: str) -> dict:
+    return {"configurable": {"thread_id": thread_id}}
+
+
+def _initial_state(request: ResearchRequest) -> dict:
+    return {
+        "query": request.query,
+        "task_results": [],
+        "iteration": 0,
+        "require_approval": request.require_approval,
+    }
+
+
+def _response_from_result(thread_id: str, result: dict) -> ResearchResponse:
+    raw_interrupts = result.get("__interrupt__", [])
+    interrupts = _jsonable(raw_interrupts)
+    status = "interrupted" if raw_interrupts else "completed"
+    return ResearchResponse(
+        thread_id=thread_id,
+        status=status,
+        final_report=result.get("final_report"),
+        interrupts=interrupts,
+    )
+
+
+async def _stream_graph(
+    graph: Any, input_value: Any, thread_id: str
+) -> AsyncIterator[ServerSentEvent]:
+    event_id = 1
+    interrupted = False
+    yield ServerSentEvent(
+        data={"thread_id": thread_id},
+        event="metadata",
+        id=str(event_id),
+    )
+    async for chunk in graph.astream(input_value, _config(thread_id), stream_mode="updates"):
+        event_id += 1
+        is_interrupt = "__interrupt__" in chunk
+        interrupted = interrupted or is_interrupt
+        yield ServerSentEvent(
+            data=_jsonable(chunk),
+            event="interrupt" if is_interrupt else "update",
+            id=str(event_id),
+        )
+    event_id += 1
+    yield ServerSentEvent(
+        data={"thread_id": thread_id, "status": "interrupted" if interrupted else "completed"},
+        event="paused" if interrupted else "done",
+        id=str(event_id),
+    )
+
+
+def create_app(*, graph: Any | None = None) -> FastAPI:
+    """Create the DeepScout API app, optionally injecting a graph for tests."""
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        if graph is not None:
+            app.state.graph = graph
+            yield
+            return
+        async with api_graph_runtime() as runtime_graph:
+            app.state.graph = runtime_graph
+            yield
+
+    app = FastAPI(title="DeepScout API", version="0.3.1", lifespan=lifespan)
+
+    @app.get("/healthz")
+    async def healthz() -> dict:
+        return {"status": "ok"}
+
+    @app.post("/v1/research", response_model=ResearchResponse)
+    async def research(request: ResearchRequest) -> ResearchResponse:
+        thread_id = request.thread_id or str(uuid4())
+        result = await app.state.graph.ainvoke(_initial_state(request), _config(thread_id))
+        return _response_from_result(thread_id, result)
+
+    @app.post("/v1/research/stream", response_class=EventSourceResponse)
+    async def research_stream(request: ResearchRequest) -> AsyncIterator[ServerSentEvent]:
+        thread_id = request.thread_id or str(uuid4())
+        async for event in _stream_graph(
+            app.state.graph,
+            _initial_state(request),
+            thread_id,
+        ):
+            yield event
+
+    @app.post("/v1/research/{thread_id}/resume", response_model=ResearchResponse)
+    async def resume(thread_id: str, request: ResumeRequest) -> ResearchResponse:
+        review = HumanReview.model_validate(request.model_dump())
+        result = await app.state.graph.ainvoke(
+            Command(resume=review.model_dump(mode="json")),
+            _config(thread_id),
+        )
+        return _response_from_result(thread_id, result)
+
+    @app.post("/v1/research/{thread_id}/resume/stream", response_class=EventSourceResponse)
+    async def resume_stream(
+        thread_id: str,
+        request: ResumeRequest,
+    ) -> AsyncIterator[ServerSentEvent]:
+        review = HumanReview.model_validate(request.model_dump())
+        command = Command(resume=review.model_dump(mode="json"))
+        async for event in _stream_graph(app.state.graph, command, thread_id):
+            yield event
+
+    @app.get("/v1/research/{thread_id}", response_model=ThreadStateResponse)
+    async def thread_state(thread_id: str) -> ThreadStateResponse:
+        snapshot = await app.state.graph.aget_state(_config(thread_id))
+        return ThreadStateResponse(
+            thread_id=thread_id,
+            next_nodes=list(snapshot.next),
+            values=_jsonable(snapshot.values),
+        )
+
+    return app
+
+
+app = create_app()

@@ -1,7 +1,7 @@
 """DeepScout 运行时配置。"""
 
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -33,6 +33,11 @@ class Settings(BaseSettings):
 
     mcp_servers: dict[str, dict[str, Any]] = Field(default_factory=dict)
     mcp_tool_name_prefix: bool = True
+
+    api_checkpoint: Literal["memory", "postgres"] = "memory"
+    postgres_dsn: str | None = None
+    api_host: str = "127.0.0.1"
+    api_port: int = Field(default=8000, ge=1, le=65535)
 
     model_config = SettingsConfigDict(env_prefix="DEEPSCOUT_", env_file=".env", extra="ignore")
 

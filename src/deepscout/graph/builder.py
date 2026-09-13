@@ -7,6 +7,7 @@ from deepscout.agents.analyzer import analyze_query
 from deepscout.agents.citation_verifier import citation_verifier
 from deepscout.agents.critic import critic
 from deepscout.agents.evidence_manager import evidence_manager
+from deepscout.agents.human_review import human_review
 from deepscout.agents.planner import planner
 from deepscout.agents.researcher import researcher
 from deepscout.agents.writer import writer
@@ -14,6 +15,7 @@ from deepscout.graph.routing import (
     dispatch_ready_tasks,
     route_after_citation_verifier,
     route_after_critic,
+    route_after_human_review,
 )
 from deepscout.graph.state import DeepScoutState
 from deepscout.runtime.budget import sync_budget
@@ -36,6 +38,7 @@ def build_graph(*, checkpointer: BaseCheckpointSaver | None = None):
         citation_verifier,
         retry_policy=retry_policy,
     )
+    builder.add_node("human_review", human_review)
 
     builder.add_edge(START, "analyze_query")
     builder.add_edge("analyze_query", "planner")
@@ -56,6 +59,11 @@ def build_graph(*, checkpointer: BaseCheckpointSaver | None = None):
     builder.add_conditional_edges(
         "citation_verifier",
         route_after_citation_verifier,
+        {"planner": "planner", "human_review": "human_review"},
+    )
+    builder.add_conditional_edges(
+        "human_review",
+        route_after_human_review,
         {"planner": "planner", "end": END},
     )
     return builder.compile(checkpointer=checkpointer)

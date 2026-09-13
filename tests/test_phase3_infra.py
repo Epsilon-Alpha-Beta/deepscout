@@ -4,7 +4,8 @@ import pytest
 from langchain_core.tools import tool
 
 from deepscout.graph.builder import build_graph
-from deepscout.runtime.checkpoint import memory_checkpointer
+from deepscout.models.hitl import HumanReview
+from deepscout.runtime.checkpoint import deepscout_serializer, memory_checkpointer
 from deepscout.runtime.retry import llm_retry_policy
 from deepscout.tools import registry as registry_module
 from deepscout.tools.registry import ToolRegistry
@@ -66,3 +67,11 @@ def test_default_retry_policy_matches_config():
     assert policy.max_attempts == 3
     assert policy.initial_interval == 0.5
     assert policy.max_interval == 8.0
+
+
+def test_checkpoint_serializer_round_trips_deepscout_models():
+    serializer = deepscout_serializer()
+    payload = serializer.dumps_typed(HumanReview(action="approve"))
+    restored = serializer.loads_typed(payload)
+    assert isinstance(restored, HumanReview)
+    assert restored.action == "approve"

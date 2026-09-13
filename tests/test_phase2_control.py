@@ -52,4 +52,4 @@ def test_citation_gap_ends_when_replan_budget_is_exhausted():
         requires_research=True,
     )
     state = {"citation_report": report, "budget": _budget(2)}
-    assert route_after_citation_verifier(state) == "end"
+    assert route_after_citation_verifier(state) == "human_review"

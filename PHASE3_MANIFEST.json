@@ -1,15 +1,17 @@
 {
   "project": "DeepScout",
-  "version": "0.3.0",
-  "phase": "Phase 3 - batch 1",
+  "version": "0.3.1",
+  "phase": "Phase 3 - batch 2",
   "validation": {
-    "pytest": "29 passed",
+    "pytest": "39 passed",
     "ruff": "passed",
     "graph_compile": "passed",
-    "cli_help": "passed",
+    "fastapi_sse": "passed",
+    "hitl_interrupt_resume": "passed",
     "postgres_extra_import": "passed",
+    "postgres_cross_process_recovery": "passed",
+    "postgres_strict_msgpack_recovery": "passed",
     "mcp_live_server": "not_run",
-    "postgres_live_instance": "not_run",
     "live_provider_integration": "not_run"
   }
 }
