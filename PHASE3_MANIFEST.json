@@ -1,0 +1,15 @@
+{
+  "project": "DeepScout",
+  "version": "0.3.0",
+  "phase": "Phase 3 - batch 1",
+  "validation": {
+    "pytest": "29 passed",
+    "ruff": "passed",
+    "graph_compile": "passed",
+    "cli_help": "passed",
+    "postgres_extra_import": "passed",
+    "mcp_live_server": "not_run",
+    "postgres_live_instance": "not_run",
+    "live_provider_integration": "not_run"
+  }
+}

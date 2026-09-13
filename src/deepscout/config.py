@@ -1,6 +1,7 @@
-"""Runtime configuration for DeepScout."""
+"""DeepScout 运行时配置。"""
 
 from functools import lru_cache
+from typing import Any
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,6 +15,7 @@ class Settings(BaseSettings):
     critic_model: str | None = None
     writer_model: str | None = None
     verifier_model: str | None = None
+
     max_concurrency: int = Field(default=3, ge=1, le=32)
     max_replans: int = Field(default=2, ge=0, le=10)
     max_research_tasks: int = Field(default=24, ge=1, le=200)
@@ -22,8 +24,16 @@ class Settings(BaseSettings):
     max_research_tokens: int = Field(default=200000, ge=1)
     max_worker_seconds: float = Field(default=900.0, gt=0.0)
     search_max_calls_per_task: int = Field(default=5, ge=1, le=50)
-    planner_retries: int = Field(default=2, ge=0, le=5)
     search_max_results: int = Field(default=5, ge=1, le=20)
+
+    planner_retries: int = Field(default=2, ge=0, le=5)
+    node_retry_max_attempts: int = Field(default=3, ge=1, le=10)
+    node_retry_initial_interval: float = Field(default=0.5, ge=0.0, le=30.0)
+    node_retry_max_interval: float = Field(default=8.0, gt=0.0, le=120.0)
+
+    mcp_servers: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    mcp_tool_name_prefix: bool = True
+
     model_config = SettingsConfigDict(env_prefix="DEEPSCOUT_", env_file=".env", extra="ignore")
 
     def model_for(self, role: str) -> str:

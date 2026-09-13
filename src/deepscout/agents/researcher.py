@@ -1,8 +1,8 @@
 """DeepAgents-backed research worker."""
 
+import asyncio
 import json
 import time
-from functools import lru_cache
 
 from deepagents import create_deep_agent
 
@@ -12,18 +12,31 @@ from deepscout.models.plan import ResearchTask
 from deepscout.models.result import ResearchOutput, TaskResult
 from deepscout.prompts.researcher import RESEARCH_TASK_PROMPT, RESEARCHER_SYSTEM_PROMPT
 from deepscout.runtime.search_budget import research_search_budget
-from deepscout.tools.registry import get_research_tools
+from deepscout.tools.registry import get_research_tools, registry_fingerprint
+
+_AGENT_CACHE: dict[tuple[str, str], object] = {}
+_AGENT_CACHE_LOCK = asyncio.Lock()
 
 
-@lru_cache(maxsize=8)
-def _get_research_agent(model_name: str):
-    return create_deep_agent(
-        model=get_chat_model(model_name),
-        tools=get_research_tools(),
-        system_prompt=RESEARCHER_SYSTEM_PROMPT,
-        response_format=ResearchOutput,
-        name="deepscout-researcher",
-    )
+async def _get_research_agent(model_name: str):
+    cache_key = (model_name, registry_fingerprint())
+    cached = _AGENT_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    async with _AGENT_CACHE_LOCK:
+        cached = _AGENT_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+        agent = create_deep_agent(
+            model=get_chat_model(model_name),
+            tools=await get_research_tools(),
+            system_prompt=RESEARCHER_SYSTEM_PROMPT,
+            response_format=ResearchOutput,
+            name="deepscout-researcher",
+        )
+        _AGENT_CACHE[cache_key] = agent
+        return agent
 
 
 def _serialize_dependency_results(results: list[TaskResult], task: ResearchTask) -> str:
@@ -65,7 +78,7 @@ async def researcher(state: dict) -> dict:
     task: ResearchTask = state["task"]
     parent_results: list[TaskResult] = state.get("task_results", [])
     settings = get_settings()
-    agent = _get_research_agent(settings.model_for("researcher"))
+    agent = await _get_research_agent(settings.model_for("researcher"))
     prompt = RESEARCH_TASK_PROMPT.format(
         query=state["query"],
         task_id=task.id,

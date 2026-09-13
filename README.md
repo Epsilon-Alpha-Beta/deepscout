@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.2.0 / Phase 2**：在 Phase 1 的 DAG 编排基础上，新增确定性的
-> Evidence Manager、Citation Verifier 与 Research Worker 预算控制。持久化、MCP 路由、
-> FastAPI/SSE、PostgreSQL、Redis 以及完整评测体系将在后续阶段逐步实现。
+> 当前版本为 **v0.3.0 / Phase 3 第一批**：在 Research DAG、Evidence/Citation 与预算控制之上，
+> 新增统一 Tool Registry、MCP 工具接入、可注入 LangGraph Checkpointer 和节点级 RetryPolicy。
+> HITL、FastAPI/SSE 与更完整的生产部署能力将在 Phase 3 后续批次继续实现。
 
 ## 系统架构
 
@@ -113,6 +113,24 @@ Supervisor 会同时考虑 DAG frontier、并发上限与剩余预算。当前�
 
 Evidence 去重、ID 生成、Claim-Evidence 映射和预算计算均为确定性逻辑；LLM 主要负责局部研究、Critic、Writer 与引用语义判断。这样后续可以分别对 DAG、Evidence、Citation 和 Budget 做消融实验，而不是把全部行为隐藏在 Prompt 中。
 
+## Phase 3 第一批已实现能力
+
+### 1. MCP Tool Registry
+
+Researcher 不再直接依赖固定工具列表，而是通过统一 `ToolRegistry` 聚合内置工具和 MCP 工具。MCP 配置使用 `DEEPSCOUT_MCP_SERVERS` JSON 注入，并支持工具名前缀和名称冲突检测；Research Agent 缓存会随着 MCP 配置指纹变化自动失效。
+
+### 2. Durable Checkpoint 基础设施
+
+`build_graph(checkpointer=...)` 支持注入任意 LangGraph Checkpointer。本地开发可使用 `InMemorySaver`；生产持久化提供 `AsyncPostgresSaver` 工厂，并通过 `postgres` optional extra 安装 PostgreSQL 依赖。
+
+### 3. Retry 与故障隔离
+
+Analyzer、Planner、Critic、Writer 和 Citation Verifier 使用 LangGraph 原生 `RetryPolicy` 对瞬时 Provider/网络故障做指数退避。Researcher 保持任务级故障隔离：单个研究任务失败会形成结构化 `TaskResult(status="failed")`，不会直接破坏整个 DAG。
+
+### 4. Checkpoint CLI
+
+命令行支持 `--checkpoint none|memory|postgres` 与 `--thread-id`。PostgreSQL DSN 可以通过 `--postgres-dsn` 或 `DEEPSCOUT_POSTGRES_DSN` 提供。
+
 ## 安装与环境
 
 要求：Python 3.11+、`uv`、至少一个受支持的 LLM Provider API Key，以及 Tavily API Key。
@@ -122,6 +140,9 @@ git clone https://github.com/Epsilon-Alpha-Beta/deepscout.git
 cd deepscout
 cp .env.example .env
 uv sync --group dev
+
+# 如需 PostgreSQL durable checkpoint
+uv sync --group dev --extra postgres
 ```
 运行测试与静态检查：
 
@@ -135,21 +156,25 @@ uv run ruff check .
 ```bash
 uv run python scripts/run_research.py \
   "比较 LangGraph、AutoGen 和 CrewAI 在生产级多智能体系统中的差异。"
+
+# 开启进程内 checkpoint
+uv run python scripts/run_research.py --checkpoint memory --thread-id demo-001 \
+  "研究长运行 Agent 的故障恢复机制。"
 ```
 
 ## 当前验证状态
 
-Phase 2 当前代码已在项目隔离环境中完成本地验证：
+Phase 3 第一批当前代码已在项目隔离环境中完成本地验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：24/24 通过；
+- `pytest`：29/29 通过；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - GitHub Actions：Install、Ruff、Tests 全部通过。
 
 ## 后续路线
 
-**Phase 3**：MCP Tool Registry、PostgreSQL checkpoint、重试与故障恢复、HITL、FastAPI + SSE。
+**Phase 3 后续**：HITL、FastAPI + SSE、生产级 PostgreSQL 联调与端到端故障恢复测试。
 
 **Phase 4**：Benchmark 数据集、轨迹级评测、消融实验、成本/延迟/质量指标与可视化。

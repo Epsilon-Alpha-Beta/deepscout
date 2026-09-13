@@ -1,5 +1,6 @@
-"""构建 DeepScout Phase 2 LangGraph。"""
+"""构建 DeepScout Phase 3 LangGraph。"""
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
 from deepscout.agents.analyzer import analyze_query
@@ -16,18 +17,25 @@ from deepscout.graph.routing import (
 )
 from deepscout.graph.state import DeepScoutState
 from deepscout.runtime.budget import sync_budget
+from deepscout.runtime.retry import llm_retry_policy
 
 
-def build_graph():
+def build_graph(*, checkpointer: BaseCheckpointSaver | None = None):
     builder = StateGraph(DeepScoutState)
-    builder.add_node("analyze_query", analyze_query)
-    builder.add_node("planner", planner)
+    retry_policy = llm_retry_policy()
+
+    builder.add_node("analyze_query", analyze_query, retry_policy=retry_policy)
+    builder.add_node("planner", planner, retry_policy=retry_policy)
     builder.add_node("supervisor", sync_budget)
     builder.add_node("researcher", researcher)
     builder.add_node("evidence_manager", evidence_manager)
-    builder.add_node("critic", critic)
-    builder.add_node("writer", writer)
-    builder.add_node("citation_verifier", citation_verifier)
+    builder.add_node("critic", critic, retry_policy=retry_policy)
+    builder.add_node("writer", writer, retry_policy=retry_policy)
+    builder.add_node(
+        "citation_verifier",
+        citation_verifier,
+        retry_policy=retry_policy,
+    )
 
     builder.add_edge(START, "analyze_query")
     builder.add_edge("analyze_query", "planner")
@@ -50,7 +58,7 @@ def build_graph():
         route_after_citation_verifier,
         {"planner": "planner", "end": END},
     )
-    return builder.compile()
+    return builder.compile(checkpointer=checkpointer)
 
 
 graph = build_graph()
