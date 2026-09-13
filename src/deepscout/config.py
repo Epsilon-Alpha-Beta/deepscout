@@ -13,8 +13,15 @@ class Settings(BaseSettings):
     researcher_model: str | None = None
     critic_model: str | None = None
     writer_model: str | None = None
+    verifier_model: str | None = None
     max_concurrency: int = Field(default=3, ge=1, le=32)
     max_replans: int = Field(default=2, ge=0, le=10)
+    max_research_tasks: int = Field(default=24, ge=1, le=200)
+    max_evidence_items: int = Field(default=80, ge=1, le=500)
+    max_searches: int = Field(default=40, ge=1, le=1000)
+    max_research_tokens: int = Field(default=200000, ge=1)
+    max_worker_seconds: float = Field(default=900.0, gt=0.0)
+    search_max_calls_per_task: int = Field(default=5, ge=1, le=50)
     planner_retries: int = Field(default=2, ge=0, le=5)
     search_max_results: int = Field(default=5, ge=1, le=20)
     model_config = SettingsConfigDict(env_prefix="DEEPSCOUT_", env_file=".env", extra="ignore")

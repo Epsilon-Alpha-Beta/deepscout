@@ -17,6 +17,9 @@ class TaskResult(BaseModel):
     status: Literal["completed", "failed"]
     summary: str
     evidence: list[Evidence] = Field(default_factory=list)
+    search_calls: int = Field(default=0, ge=0)
+    model_tokens: int = Field(default=0, ge=0)
+    worker_seconds: float = Field(default=0.0, ge=0.0)
     error: str | None = None
 
 

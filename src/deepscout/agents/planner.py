@@ -14,6 +14,10 @@ from deepscout.prompts.planner import INITIAL_PLAN_PROMPT, REPLAN_PROMPT
 def _json(value: object) -> str:
     if hasattr(value, "model_dump"):
         value = value.model_dump(mode="json")
+    elif isinstance(value, list):
+        value = [
+            item.model_dump(mode="json") if hasattr(item, "model_dump") else item for item in value
+        ]
     return json.dumps(value, ensure_ascii=False, indent=2, default=str)
 
 
@@ -52,7 +56,10 @@ async def planner(state: DeepScoutState) -> dict:
     for _ in range(settings.planner_retries + 1):
         try:
             extension = await structured.ainvoke([HumanMessage(content=prompt)])
-            return {"plan": extend_plan(existing_plan, extension)}
+            return {
+                "plan": extend_plan(existing_plan, extension),
+                "replan_count": state.get("replan_count", 0) + 1,
+            }
         except (ValueError, TypeError) as exc:
             last_error = exc
             prompt += (

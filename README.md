@@ -13,7 +13,8 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> Phase 1 聚焦 Agent 编排本身。持久化、MCP 路由、引用验证、预算控制、
+> 当前版本为 **v0.2.0 / Phase 2**：在 Phase 1 的 DAG 编排基础上，新增确定性的
+> Evidence Manager、Citation Verifier 与 Research Worker 预算控制。持久化、MCP 路由、
 > FastAPI/SSE、PostgreSQL、Redis 以及完整评测体系将在后续阶段逐步实现。
 
 ## 系统架构
@@ -25,33 +26,38 @@ START
 analyze_query
   |
   v
-planner  <------------------------+
-  |                               |
-  v                               |
-supervisor                        |
-  |
-  +---- ready tasks ----+         |
-  |                     |         |
-  v                     v         |
-researcher ...      researcher    |
-  |                     |         |
-  +----------+----------+         |
-             |                    |
-             v                    |
-         supervisor               |
-             |                    |
-       DAG exhausted              |
-             v                    |
-           critic                 |
-          /      \                |
-     re-plan      sufficient -----+
-        |              |
-        +--------------+
-                       v
-                     writer
-                       |
-                       v
-                      END
+planner <----------------------------------+
+  |                                        |
+  v                                        |
+supervisor + budget                        |
+  |                                        |
+  +---- ready tasks ----+                  |
+  |                     |                  |
+  v                     v                  |
+researcher ...      researcher             |
+  |                     |                  |
+  +----------+----------+                  |
+             |                             |
+             v                             |
+        supervisor                         |
+             |                             |
+        DAG exhausted                      |
+             v                             |
+      evidence_manager                     |
+             |                             |
+             v                             |
+           critic                          |
+          /      \                         |
+      gap /        \ sufficient            |
+        v           v                      |
+     planner       writer                  |
+                     |                     |
+                     v                     |
+             citation_verifier             |
+                 /       \                 |
+          evidence gap     supported       |
+               |               |           |
+               +---------------+---------->END
 ```
 
 核心设计原则是：
@@ -88,6 +94,25 @@ Supervisor 不直接修改任务状态，而是根据不可变 Plan 和 append-o
 
 当前 DAG 执行完毕后，Critic 会检查研究覆盖度、缺失维度、冲突信息与失败任务；已有任务保持不可变，只允许新增任务 ID，并通过 `DEEPSCOUT_MAX_REPLANS` 限制重规划次数。
 
+
+## Phase 2 已实现能力
+
+### 1. Evidence Manager
+
+Researcher 返回的原始 Evidence 会先经过确定性处理：规范化 URL、移除常见追踪参数、计算内容 SHA-256 指纹、按 URL/内容双重去重，并生成稳定的 `evidence_id`。Researcher 提取的原子化 claims 会进一步形成 `Claim → Evidence IDs` 映射。
+
+### 2. Citation Verifier
+
+Writer 生成报告后，Citation Verifier 使用结构化 Schema 对事实性 claim 做 `supported / partial / unsupported` 判断，并输出 coverage、unsupported claims 与是否需要继续研究。只有引用缺口会实质影响答案质量时，才触发新的有界 Re-plan。
+
+### 3. Research Worker Budget Manager
+
+Supervisor 会同时考虑 DAG frontier、并发上限与剩余预算。当前硬约束包括研究任务数、重规划次数、Evidence 数量与 Web Search 次数；并记录 Researcher 的模型 token usage（Provider 提供 usage metadata 时）与 Worker 耗时。并行任务会在派发时分配独立 `search_quota`，额度耗尽后 `web_search` 不再访问 Tavily。
+
+### 4. 可复现的控制边界
+
+Evidence 去重、ID 生成、Claim-Evidence 映射和预算计算均为确定性逻辑；LLM 主要负责局部研究、Critic、Writer 与引用语义判断。这样后续可以分别对 DAG、Evidence、Citation 和 Budget 做消融实验，而不是把全部行为隐藏在 Prompt 中。
+
 ## 安装与环境
 
 要求：Python 3.11+、`uv`、至少一个受支持的 LLM Provider API Key，以及 Tavily API Key。
@@ -114,18 +139,16 @@ uv run python scripts/run_research.py \
 
 ## 当前验证状态
 
-Phase 1 已在项目隔离环境中完成验证：
+Phase 2 当前代码已在项目隔离环境中完成本地验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：11/11 通过；
+- `pytest`：24/24 通过；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - GitHub Actions：Install、Ruff、Tests 全部通过。
 
 ## 后续路线
-
-**Phase 2**：Evidence Manager、来源规范化与去重、Claim-Evidence 映射、Citation Verifier、Budget Manager。
 
 **Phase 3**：MCP Tool Registry、PostgreSQL checkpoint、重试与故障恢复、HITL、FastAPI + SSE。
 

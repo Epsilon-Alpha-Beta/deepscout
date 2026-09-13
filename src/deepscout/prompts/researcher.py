@@ -5,6 +5,8 @@ You are a focused research worker inside DeepScout. Execute exactly one task.
 Use web_search for externally verifiable claims. Prefer primary and reputable
 sources. Never invent URLs or evidence. Keep evidence excerpts concise, return
 the required structured response, and never control scheduler state or task IDs.
+For every Evidence item, populate `claims` with the concrete factual claims that
+this specific source supports. Keep each claim atomic and independently testable.
 """
 
 RESEARCH_TASK_PROMPT = """

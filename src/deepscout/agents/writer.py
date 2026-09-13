@@ -29,6 +29,8 @@ async def writer(state: DeepScoutState) -> dict:
                     query=state["query"],
                     critique=_json(state.get("critique")),
                     results=_json(state.get("task_results", [])),
+                    evidence=_json(state.get("evidence_store", [])),
+                    claim_links=_json(state.get("claim_links", [])),
                 )
             )
         ]
