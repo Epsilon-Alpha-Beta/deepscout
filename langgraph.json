@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "deepscout": "./src/deepscout/graph/builder.py:graph"
+  },
+  "env": ".env"
+}

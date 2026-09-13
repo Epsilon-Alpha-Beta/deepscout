@@ -1,0 +1,8 @@
+{
+  "status": "not_run",
+  "reason": "Phase 1 package was generated without live provider credentials.",
+  "upstream": "langchain-ai/deepagents",
+  "reference": "examples/deep_research",
+  "deepagents_version": "0.7.13",
+  "metrics": {}
+}

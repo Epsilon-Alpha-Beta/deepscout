@@ -1,0 +1,7 @@
+[
+  {"id": "framework-comparison", "query": "Compare LangGraph, AutoGen and CrewAI for production multi-agent systems."},
+  {"id": "durable-agents", "query": "Research the main design patterns for durable execution in long-running AI agents."},
+  {"id": "mcp-tradeoffs", "query": "Analyze the engineering tradeoffs of using MCP as an enterprise agent tool layer."},
+  {"id": "citation-grounding", "query": "Research practical methods for measuring citation correctness in deep research agents."},
+  {"id": "agent-evaluation", "query": "Compare trajectory-level and final-answer evaluation methods for tool-using agents."}
+]

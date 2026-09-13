@@ -1,0 +1,9 @@
+{
+  "project": "DeepScout",
+  "version": "0.1.0",
+  "phase": "Phase 1",
+  "python_files": 29,
+  "total_files": 41,
+  "syntax_check": "passed",
+  "syntax_errors": []
+}
