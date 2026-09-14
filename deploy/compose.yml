@@ -13,12 +13,23 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: public.ecr.aws/docker/library/redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   api:
     build:
       context: ..
       dockerfile: Dockerfile
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "${DEEPSCOUT_API_PORT:-8000}:8000"
@@ -28,8 +39,13 @@ services:
       DEEPSCOUT_API_CHECKPOINT: postgres
       DEEPSCOUT_POSTGRES_DSN: postgresql://deepscout:${DEEPSCOUT_POSTGRES_PASSWORD}@postgres:5432/deepscout
       DEEPSCOUT_API_KEY: ${DEEPSCOUT_API_KEY:?set DEEPSCOUT_API_KEY}
+      DEEPSCOUT_API_RATE_LIMIT_BACKEND: redis
+      DEEPSCOUT_API_RATE_LIMIT_REDIS_URL: redis://redis:6379/0
       DEEPSCOUT_API_RATE_LIMIT_REQUESTS: ${DEEPSCOUT_API_RATE_LIMIT_REQUESTS:-60}
       DEEPSCOUT_API_RATE_LIMIT_WINDOW_SECONDS: ${DEEPSCOUT_API_RATE_LIMIT_WINDOW_SECONDS:-60}
+      DEEPSCOUT_OTEL_ENABLED: ${DEEPSCOUT_OTEL_ENABLED:-false}
+      DEEPSCOUT_OTEL_SERVICE_NAME: ${DEEPSCOUT_OTEL_SERVICE_NAME:-deepscout-api}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
       LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}

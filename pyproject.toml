@@ -1,6 +1,6 @@
 [project]
 name = "deepscout"
-version = "0.3.3"
+version = "0.3.4"
 description = "Production-grade multi-agent deep research with LangGraph and DeepAgents."
 readme = "README.md"
 requires-python = ">=3.11,<4.0"
@@ -18,6 +18,10 @@ dependencies = [
   "fastapi>=0.135,<1",
   "uvicorn[standard]>=0.35,<1",
   "prometheus-client>=0.21,<1",
+  "redis>=7,<9",
+  "opentelemetry-api>=1.30,<2",
+  "opentelemetry-sdk>=1.30,<2",
+  "opentelemetry-exporter-otlp-proto-http>=1.30,<2",
 ]
 
 [project.optional-dependencies]

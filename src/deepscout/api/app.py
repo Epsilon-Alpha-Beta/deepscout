@@ -6,13 +6,19 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.responses import JSONResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from langgraph.types import Command
+from opentelemetry.sdk.trace import TracerProvider
 from pydantic import BaseModel
 
 from deepscout import __version__
 from deepscout.api.observability import RESEARCH_RUNS, ObservabilityMiddleware, metrics_response
-from deepscout.api.rate_limit import enforce_rate_limit
+from deepscout.api.rate_limit import (
+    close_rate_limiters,
+    enforce_rate_limit,
+    rate_limit_readiness,
+)
 from deepscout.api.runtime import api_graph_runtime
 from deepscout.api.schemas import (
     ResearchRequest,
@@ -21,6 +27,7 @@ from deepscout.api.schemas import (
     ThreadStateResponse,
 )
 from deepscout.api.security import require_api_principal
+from deepscout.api.tracing import build_tracer_provider
 from deepscout.config import get_settings
 from deepscout.models.hitl import HumanReview
 
@@ -94,25 +101,46 @@ async def _stream_graph(
     )
 
 
-def create_app(*, graph: Any | None = None) -> FastAPI:
+def create_app(
+    *, graph: Any | None = None, tracer_provider: TracerProvider | None = None
+) -> FastAPI:
     """Create the DeepScout API app, optionally injecting a graph for tests."""
+
+    configured_tracer = tracer_provider or build_tracer_provider()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        if graph is not None:
-            app.state.graph = graph
-            yield
-            return
-        async with api_graph_runtime() as runtime_graph:
-            app.state.graph = runtime_graph
-            yield
+        try:
+            if graph is not None:
+                app.state.graph = graph
+                yield
+                return
+            async with api_graph_runtime() as runtime_graph:
+                app.state.graph = runtime_graph
+                yield
+        finally:
+            await close_rate_limiters()
+            if configured_tracer is not None:
+                configured_tracer.shutdown()
 
     app = FastAPI(title="DeepScout API", version=__version__, lifespan=lifespan)
-    app.add_middleware(ObservabilityMiddleware)
+    app.add_middleware(ObservabilityMiddleware, tracer_provider=configured_tracer)
 
     @app.get("/healthz")
     async def healthz() -> dict:
         return {"status": "ok"}
+
+    @app.get("/readyz")
+    async def readyz():
+        ready, limiter_backend = await rate_limit_readiness()
+        payload = {
+            "status": "ready" if ready else "not_ready",
+            "rate_limit": limiter_backend,
+            "checkpoint": get_settings().api_checkpoint,
+        }
+        if not ready:
+            return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=payload)
+        return payload
 
     @app.get("/metrics", dependencies=[Depends(require_api_principal)])
     async def metrics():

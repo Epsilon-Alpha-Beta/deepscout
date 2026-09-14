@@ -2,22 +2,28 @@ FROM public.ecr.aws/docker/library/python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    UV_LINK_MODE=copy
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+ARG PIP_INDEX_URL=https://pypi.org/simple
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir uv \
-    && useradd --create-home --uid 10001 deepscout
+RUN useradd --create-home --uid 10001 deepscout
 
-COPY pyproject.toml uv.lock README.md ./
+COPY deploy/requirements.lock.txt /tmp/requirements.lock.txt
+RUN pip install --no-cache-dir --require-hashes \
+    --index-url "$PIP_INDEX_URL" \
+    --timeout 120 --retries 5 \
+    -r /tmp/requirements.lock.txt
+
+COPY pyproject.toml README.md ./
 COPY src ./src
 COPY scripts ./scripts
 
-RUN uv sync --frozen --no-dev --extra postgres \
-    && chown -R deepscout:deepscout /app
+RUN chown -R deepscout:deepscout /app
 
 USER deepscout
-ENV PATH="/app/.venv/bin:${PATH}" \
+ENV PYTHONPATH="/app/src" \
     DEEPSCOUT_API_HOST=0.0.0.0 \
     DEEPSCOUT_API_PORT=8000
 EXPOSE 8000

@@ -18,7 +18,7 @@ DeepScout 的 `/v1/*` 接口支持两种共享密钥入口：
 - `DEEPSCOUT_API_RATE_LIMIT_REQUESTS`；
 - `DEEPSCOUT_API_RATE_LIMIT_WINDOW_SECONDS`。
 
-超过配额时返回 HTTP 429，并附带 `Retry-After`。该实现适用于单进程/单 worker 部署；多 worker、多实例场景应迁移到 Redis、API Gateway 或其他共享限流后端。
+超过配额时返回 HTTP 429，并附带 `Retry-After`。默认 memory 后端适用于单进程；生产多 worker/多实例可切换 Redis 后端，使用 Lua 原子滑动窗口共享配额。
 
 ## 请求追踪与日志
 
@@ -40,3 +40,7 @@ DeepScout 的 `/v1/*` 接口支持两种共享密钥入口：
 DeepScout 基于 LangChain/LangGraph，因此可通过运行环境开启 LangSmith tracing。建议设置 `LANGSMITH_TRACING=true`、`LANGSMITH_PROJECT=deepscout`，并从 Secret Manager 注入对应凭据。仓库不保存 tracing token。
 
 Prometheus 负责服务级 RED 指标，LangSmith 负责 Agent/LLM/tool trajectory；两者职责互补。
+
+## OpenTelemetry
+
+可选启用 OpenTelemetry tracing。API 请求产生 SERVER span，并附带 request ID、HTTP route 和 status。OTLP/HTTP exporter 使用标准 OTEL 环境变量，推荐生产环境发送到 OpenTelemetry Collector。

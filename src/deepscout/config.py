@@ -41,7 +41,13 @@ class Settings(BaseSettings):
     api_key: str | None = None
     api_rate_limit_requests: int = Field(default=60, ge=1, le=100000)
     api_rate_limit_window_seconds: float = Field(default=60.0, gt=0.0, le=3600.0)
+    api_rate_limit_backend: Literal["memory", "redis"] = "memory"
+    api_rate_limit_redis_url: str | None = None
+    api_rate_limit_redis_timeout_seconds: float = Field(default=1.0, gt=0.0, le=30.0)
     api_metrics_enabled: bool = True
+
+    otel_enabled: bool = False
+    otel_service_name: str = "deepscout-api"
 
     model_config = SettingsConfigDict(env_prefix="DEEPSCOUT_", env_file=".env", extra="ignore")
 

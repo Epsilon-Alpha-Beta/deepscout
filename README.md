@@ -13,7 +13,7 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.3.3 / Phase 3 第三批补丁**：在耐久执行与服务化基础上，
+> 当前版本为 **v0.3.4 / Phase 3 第四批生产增强**：在耐久执行与服务化基础上，
 > 新增真实 MCP 双传输联调、API 认证与限流、Prometheus/结构化日志，以及非 root 容器部署。
 > 真实 LLM Provider + Tavily 端到端研究 harness 已就绪，但当前服务器缺少所需凭据，因此仍未标记为通过。
 
@@ -153,7 +153,7 @@ Citation Verifier 之后增加 Human Review Gate。启用 `require_approval` 时
 
 PostgreSQL 与 Memory Checkpointer 使用显式 `JsonPlusSerializer` 白名单，仅允许 DeepScout Graph State 中需要持久化的模型模块进行 MsgPack 反序列化，避免依赖 LangGraph 当前的宽松兼容模式。
 
-## Phase 3 第三批已实现能力
+## Phase 3 第三、四批已实现能力
 
 ### 1. 真实 MCP Server 双传输联调
 
@@ -161,7 +161,7 @@ PostgreSQL 与 Memory Checkpointer 使用显式 `JsonPlusSerializer` 白名单�
 
 ### 2. API 认证与限流
 
-`/v1/*` 支持 `X-API-Key` 与 Bearer 两种共享凭据入口；配置共享凭据后缺失或错误凭据返回 401。凭据比较使用 constant-time 比较，限流分区使用不可逆 SHA-256 指纹。当前限流器为进程内滑动窗口，适合单 worker；多副本生产环境应替换为 Redis/API Gateway 等共享状态后端。
+`/v1/*` 支持 `X-API-Key` 与 Bearer 两种共享凭据入口；配置共享凭据后缺失或错误凭据返回 401。凭据比较使用 constant-time 比较，限流分区使用不可逆 SHA-256 指纹。限流后端支持 memory 与 Redis；memory 适合单 worker，本批次新增的 Redis Lua 滑动窗口用于多 worker/多副本共享配额。
 
 ### 3. 可观测性
 
@@ -169,7 +169,7 @@ HTTP 层生成/透传 `X-Request-ID`，输出 JSON 结构化 access log，并暴
 
 ### 4. 容器与部署
 
-新增非 root Dockerfile、PostgreSQL Compose 模板与部署文档。真实 Podman smoke 已验证镜像构建、容器启动、宿主健康检查、受保护 metrics、UID 10001 非 root 运行和 Docker HEALTHCHECK 元数据。当前服务器没有 Compose 前端，因此 Compose 仅完成 YAML/关键字段校验，未声称完成 Compose runtime 联调。
+新增非 root Dockerfile、PostgreSQL + Redis Compose 模板与部署文档。Docker 依赖由 `uv.lock` 导出的带哈希 requirements 锁驱动，并由自动化测试校验同步。真实 Podman smoke 用于验证镜像构建、容器启动、readiness、受保护 metrics、UID 10001 非 root 运行和 Docker HEALTHCHECK 元数据；当前服务器没有 Compose 前端，因此 Compose 只做 YAML/关键字段校验。
 
 ### 5. Live Provider E2E Harness
 
@@ -209,13 +209,20 @@ uv run python scripts/run_research.py --checkpoint memory --thread-id demo-001 \
 uv run python scripts/run_api.py
 ```
 
+
+### 6. Redis 分布式限流与 OpenTelemetry
+
+限流后端新增 `memory | redis`。Redis 路径用 Lua 脚本原子执行窗口清理、计数与写入，已用三个独立 Python 进程共享同一 Redis key 验证 `allowed / allowed / limited`。新增 `/readyz`，Redis 不可用时返回 503。
+
+API request middleware 新增 OpenTelemetry SERVER span，携带 request ID、route 与 status；OTLP/HTTP exporter 使用标准 `OTEL_EXPORTER_OTLP_*` 环境变量配置。测试使用官方 InMemorySpanExporter 验证 span 实际生成。
+
 ## 当前验证状态
 
-Phase 3 第三批当前代码已在项目隔离环境中完成验证：
+Phase 3 第四批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：47/47 通过；
+- `pytest`：52/52 通过（包含真实 Redis 集成测试与 Docker requirements 锁同步校验）；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -229,6 +236,6 @@ Phase 3 第三批当前代码已在项目隔离环境中完成验证：
 
 ## 后续路线
 
-**Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调，并视多副本部署需求将限流后端升级为共享存储。
+**Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
 **Phase 4**：Benchmark 数据集、轨迹级评测、消融实验、成本/延迟/质量指标与可视化。

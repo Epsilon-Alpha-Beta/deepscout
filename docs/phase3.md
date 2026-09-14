@@ -1,6 +1,6 @@
 # Phase 3：工具接入与耐久执行基础设施
 
-Phase 3 分三批推进：第一批完成 MCP Tool Registry、Checkpoint 与 Retry 基础设施；第二批加入 HITL、FastAPI/SSE 并验证 PostgreSQL 跨进程耐久恢复；第三批补齐真实 MCP 协议联调、服务安全边界、可观测性与容器化部署。
+Phase 3 分四批推进：第一批完成 MCP Tool Registry、Checkpoint 与 Retry 基础设施；第二批加入 HITL、FastAPI/SSE 并验证 PostgreSQL 跨进程耐久恢复；第三批补齐真实 MCP 协议联调、API 安全边界、Prometheus/结构化日志与容器化部署；第四批加入 Redis 共享限流、readiness、OpenTelemetry 与可复现 Docker 依赖锁。
 
 ## MCP Tool Registry
 
@@ -59,9 +59,15 @@ Analyzer、Planner、Critic、Writer 与 Citation Verifier 使用 LangGraph 原�
 
 真实 MCP 联调不再使用 FakeClient：仓库内 FastMCP 测试服务分别通过 stdio 与 Streamable HTTP 启动，`MultiServerMCPClient` 已真实完成工具发现和调用。
 
-API 支持共享凭据认证、caller-scoped 滑动窗口限流、`X-Request-ID`、JSON access log 与 Prometheus metrics。共享凭据启用后 `/metrics` 同样进入保护边界。当前限流状态保存在单进程内存中，多 worker/多副本部署需要 Redis、API Gateway 等共享后端。
+API 支持共享凭据认证、caller-scoped 进程内滑动窗口限流、`X-Request-ID`、JSON access log 与 Prometheus metrics。共享凭据启用后 `/metrics` 同样进入保护边界。
 
-Docker 镜像使用非 root UID 10001，默认绑定 `0.0.0.0:8000` 并携带 HEALTHCHECK。已真实完成镜像构建和容器 runtime smoke；Compose 文件完成 YAML 与关键依赖字段校验，但当前服务器没有 Compose frontend，因此不声称完成 Compose runtime 联调。
+Docker 镜像使用非 root UID 10001，默认绑定 `0.0.0.0:8000` 并携带 HEALTHCHECK。
+
+## 第四批：共享限流、readiness 与 tracing
+
+限流后端扩展为 `memory | redis`。Redis 模式使用 Lua 原子滑动窗口，适用于多 worker/多副本共享配额；`/readyz` 会真实探测 Redis，依赖不可用时返回 503。HTTP middleware 新增 OpenTelemetry SERVER span，并支持标准 OTLP/HTTP exporter 配置。
+
+Docker 依赖从 `uv.lock` 导出为带哈希 requirements 锁，并由测试防止漂移；构建支持可配置 `PIP_INDEX_URL`，仍通过 `--require-hashes` 校验 artifact。Compose 已升级为 PostgreSQL + Redis 双依赖；当前服务器没有 Compose frontend，因此不声称完成 Compose runtime 联调。
 
 ## 真实 Provider E2E 状态
 
@@ -70,3 +76,9 @@ Docker 镜像使用非 root UID 10001，默认绑定 `0.0.0.0:8000` 并携带 HE
 ## 当前边界
 
 当前已完成 PostgreSQL 耐久恢复、FastAPI/HITL、真实 MCP stdio/Streamable HTTP、认证/限流/Prometheus 和容器 runtime 验证。真实 LLM Provider + Tavily 完整端到端研究仍因服务器缺少所需凭据而阻塞。
+
+## Redis 共享限流与 OTel tracing
+
+生产部署可将 API 限流后端切到 Redis。Lua 脚本把窗口清理、计数、判定和写入放在一个原子操作中；已使用隔离 Redis 7 实例和三个独立 Python 进程验证共享窗口。`/readyz` 会真实探测 Redis，依赖不可用时返回 503。
+
+HTTP middleware 同时保留 Prometheus 指标和结构化日志，并新增 OpenTelemetry SERVER span。OTLP exporter 遵循标准环境变量；本地测试使用 InMemorySpanExporter 验证 request ID、route、status 已写入 span。
