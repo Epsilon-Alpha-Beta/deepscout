@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.3.1 / Phase 3 第二批**：在 MCP、Checkpoint 与 Retry 基础设施之上，
-> 新增 HITL 人工审核、FastAPI + SSE 服务层，并完成 PostgreSQL Checkpoint 的真实跨进程恢复验证。
-> 真实 MCP Server 与真实 LLM Provider 端到端研究仍保留为后续联调项。
+> 当前版本为 **v0.3.2 / Phase 3 第三批**：在耐久执行与服务化基础上，
+> 新增真实 MCP 双传输联调、API 认证与限流、Prometheus/结构化日志，以及非 root 容器部署。
+> 真实 LLM Provider + Tavily 端到端研究 harness 已就绪，但当前服务器缺少所需凭据，因此仍未标记为通过。
 
 ## 系统架构
 
@@ -153,6 +153,28 @@ Citation Verifier 之后增加 Human Review Gate。启用 `require_approval` 时
 
 PostgreSQL 与 Memory Checkpointer 使用显式 `JsonPlusSerializer` 白名单，仅允许 DeepScout Graph State 中需要持久化的模型模块进行 MsgPack 反序列化，避免依赖 LangGraph 当前的宽松兼容模式。
 
+## Phase 3 第三批已实现能力
+
+### 1. 真实 MCP Server 双传输联调
+
+新增基于 FastMCP 的确定性研究工具服务，并真实验证 stdio 与 Streamable HTTP 两种传输。DeepScout 通过 `MultiServerMCPClient` 完成独立 MCP Server 的工具发现与实际调用，测试不再只依赖 FakeClient。
+
+### 2. API 认证与限流
+
+`/v1/*` 支持 `X-API-Key` 与 Bearer 两种共享凭据入口；配置共享凭据后缺失或错误凭据返回 401。凭据比较使用 constant-time 比较，限流分区使用不可逆 SHA-256 指纹。当前限流器为进程内滑动窗口，适合单 worker；多副本生产环境应替换为 Redis/API Gateway 等共享状态后端。
+
+### 3. 可观测性
+
+HTTP 层生成/透传 `X-Request-ID`，输出 JSON 结构化 access log，并暴露 Prometheus 请求计数、请求延迟、活跃请求与研究任务结果指标。配置共享凭据后 `/metrics` 同样需要认证。LangSmith tracing 可通过标准环境变量按需启用。
+
+### 4. 容器与部署
+
+新增非 root Dockerfile、PostgreSQL Compose 模板与部署文档。真实 Podman smoke 已验证镜像构建、容器启动、宿主健康检查、受保护 metrics、UID 10001 非 root 运行和 Docker HEALTHCHECK 元数据。当前服务器没有 Compose 前端，因此 Compose 仅完成 YAML/关键字段校验，未声称完成 Compose runtime 联调。
+
+### 5. Live Provider E2E Harness
+
+`scripts/check_live_e2e.py` 提供低预算真实 Provider + Tavily 全图 smoke test。当前服务器未配置 Anthropic/Tavily 凭据，实际执行状态为 `blocked_missing_credentials`，因此不会将真实 Provider E2E 标记为已通过。
+
 ## 安装与环境
 
 要求：Python 3.11+、`uv`、至少一个受支持的 LLM Provider API Key，以及 Tavily API Key。
@@ -189,19 +211,23 @@ uv run python scripts/run_api.py
 
 ## 当前验证状态
 
-Phase 3 第二批当前代码已在项目隔离环境中完成验证：
+Phase 3 第三批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：39/39 通过；
+- `pytest`：45/45 通过；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
 - FastAPI/HITL：真实 InMemorySaver interrupt/resume 集成测试通过；
+- MCP：真实 stdio 与 Streamable HTTP Server 工具发现/调用通过；
+- API：认证、限流、Request ID 与 Prometheus 指标测试通过；
+- 容器：真实构建与运行 smoke 通过，非 root 运行；
+- Live Provider：当前因缺少 Provider/Tavily 凭据而阻塞；
 - GitHub Actions：CI 在每次 push 后执行 Install、Ruff、Tests；远端结果以当前提交对应的 workflow run 为准。
 
 ## 后续路线
 
-**Phase 3 后续**：真实 MCP Server、真实 LLM Provider 端到端联调，以及更完整的部署/认证/限流/可观测性。
+**Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调，并视多副本部署需求将限流后端升级为共享存储。
 
 **Phase 4**：Benchmark 数据集、轨迹级评测、消融实验、成本/延迟/质量指标与可视化。

@@ -1,17 +1,27 @@
 {
   "project": "DeepScout",
-  "version": "0.3.1",
-  "phase": "Phase 3 - batch 2",
+  "version": "0.3.2",
+  "phase": "Phase 3 - batch 3",
   "validation": {
-    "pytest": "39 passed",
+    "pytest": "45 passed",
     "ruff": "passed",
     "graph_compile": "passed",
     "fastapi_sse": "passed",
     "hitl_interrupt_resume": "passed",
-    "postgres_extra_import": "passed",
     "postgres_cross_process_recovery": "passed",
     "postgres_strict_msgpack_recovery": "passed",
-    "mcp_live_server": "not_run",
-    "live_provider_integration": "not_run"
+    "mcp_stdio_live_server": "passed",
+    "mcp_streamable_http_live_server": "passed",
+    "api_authentication": "passed",
+    "api_rate_limit": "passed_single_process",
+    "prometheus_metrics": "passed",
+    "request_id_structured_logging": "passed",
+    "container_build": "passed",
+    "container_runtime_smoke": "passed",
+    "container_non_root": "passed_uid_10001",
+    "docker_healthcheck_metadata": "passed",
+    "compose_config": "passed_yaml_structure",
+    "compose_runtime": "not_run_no_compose_frontend",
+    "live_provider_tavily_e2e": "blocked_missing_credentials"
   }
 }

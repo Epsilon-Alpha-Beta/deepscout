@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     postgres_dsn: str | None = None
     api_host: str = "127.0.0.1"
     api_port: int = Field(default=8000, ge=1, le=65535)
+    api_key: str | None = None
+    api_rate_limit_requests: int = Field(default=60, ge=1, le=100000)
+    api_rate_limit_window_seconds: float = Field(default=60.0, gt=0.0, le=3600.0)
+    api_metrics_enabled: bool = True
 
     model_config = SettingsConfigDict(env_prefix="DEEPSCOUT_", env_file=".env", extra="ignore")
 

@@ -1,6 +1,6 @@
 # Phase 3：工具接入与耐久执行基础设施
 
-Phase 3 分两批推进：第一批完成 MCP Tool Registry、Checkpoint 与 Retry 基础设施；第二批继续加入 HITL、FastAPI/SSE，并验证 PostgreSQL 跨进程耐久恢复。
+Phase 3 分三批推进：第一批完成 MCP Tool Registry、Checkpoint 与 Retry 基础设施；第二批加入 HITL、FastAPI/SSE 并验证 PostgreSQL 跨进程耐久恢复；第三批补齐真实 MCP 协议联调、服务安全边界、可观测性与容器化部署。
 
 ## MCP Tool Registry
 
@@ -55,6 +55,18 @@ Analyzer、Planner、Critic、Writer 与 Citation Verifier 使用 LangGraph 原�
 
 同一流程在 `LANGGRAPH_STRICT_MSGPACK=true` 下再次通过。Checkpoint 工厂使用显式 `JsonPlusSerializer` allowlist，仅允许 DeepScout 状态模型反序列化，不依赖宽松的“允许所有类型”策略。
 
+## 第三批：真实 MCP 与生产硬化
+
+真实 MCP 联调不再使用 FakeClient：仓库内 FastMCP 测试服务分别通过 stdio 与 Streamable HTTP 启动，`MultiServerMCPClient` 已真实完成工具发现和调用。
+
+API 支持共享凭据认证、caller-scoped 滑动窗口限流、`X-Request-ID`、JSON access log 与 Prometheus metrics。共享凭据启用后 `/metrics` 同样进入保护边界。当前限流状态保存在单进程内存中，多 worker/多副本部署需要 Redis、API Gateway 等共享后端。
+
+Docker 镜像使用非 root UID 10001，默认绑定 `0.0.0.0:8000` 并携带 HEALTHCHECK。已真实完成镜像构建和容器 runtime smoke；Compose 文件完成 YAML 与关键依赖字段校验，但当前服务器没有 Compose frontend，因此不声称完成 Compose runtime 联调。
+
+## 真实 Provider E2E 状态
+
+`scripts/check_live_e2e.py` 会检测当前模型对应的 Provider Key 与 Tavily Key，并运行低预算完整 Research Graph smoke。当前服务器缺少 Anthropic 与 Tavily 凭据，实际执行结果为 `blocked_missing_credentials`；因此 Provider + Tavily E2E 仍不是 passed。
+
 ## 当前边界
 
-当前已完成本地/隔离 PostgreSQL 实例上的耐久恢复与 FastAPI/HITL 集成验证。尚未完成真实 MCP Server 联调和真实 LLM Provider + Tavily 的完整端到端研究，因此不会把这些能力标记为已验证。
+当前已完成 PostgreSQL 耐久恢复、FastAPI/HITL、真实 MCP stdio/Streamable HTTP、认证/限流/Prometheus 和容器 runtime 验证。真实 LLM Provider + Tavily 完整端到端研究仍因服务器缺少所需凭据而阻塞。

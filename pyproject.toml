@@ -1,6 +1,6 @@
 [project]
 name = "deepscout"
-version = "0.3.1"
+version = "0.3.2"
 description = "Production-grade multi-agent deep research with LangGraph and DeepAgents."
 readme = "README.md"
 requires-python = ">=3.11,<4.0"
@@ -17,6 +17,7 @@ dependencies = [
   "langchain-mcp-adapters==0.3.2",
   "fastapi>=0.135,<1",
   "uvicorn[standard]>=0.35,<1",
+  "prometheus-client>=0.21,<1",
 ]
 
 [project.optional-dependencies]

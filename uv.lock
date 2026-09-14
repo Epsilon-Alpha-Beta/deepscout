@@ -456,7 +456,7 @@ wheels = [
 
 [[package]]
 name = "deepscout"
-version = "0.3.1"
+version = "0.3.2"
 source = { editable = "." }
 dependencies = [
     { name = "deepagents" },
@@ -465,6 +465,7 @@ dependencies = [
     { name = "langchain-anthropic" },
     { name = "langchain-mcp-adapters" },
     { name = "langgraph" },
+    { name = "prometheus-client" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "tavily-python" },
@@ -494,6 +495,7 @@ requires-dist = [
     { name = "langchain-mcp-adapters", specifier = "==0.3.2" },
     { name = "langgraph", specifier = ">=1.0,<2.0" },
     { name = "langgraph-checkpoint-postgres", marker = "extra == 'postgres'", specifier = "==3.1.2" },
+    { name = "prometheus-client", specifier = ">=0.21,<1" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = "==3.3.5" },
     { name = "pydantic", specifier = ">=2.10,<3.0" },
     { name = "pydantic-settings", specifier = ">=2.7,<3.0" },

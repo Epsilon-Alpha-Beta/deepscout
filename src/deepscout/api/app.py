@@ -5,11 +5,14 @@ from contextlib import asynccontextmanager
 from typing import Any
 from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from langgraph.types import Command
 from pydantic import BaseModel
 
+from deepscout import __version__
+from deepscout.api.observability import RESEARCH_RUNS, ObservabilityMiddleware, metrics_response
+from deepscout.api.rate_limit import enforce_rate_limit
 from deepscout.api.runtime import api_graph_runtime
 from deepscout.api.schemas import (
     ResearchRequest,
@@ -17,6 +20,8 @@ from deepscout.api.schemas import (
     ResumeRequest,
     ThreadStateResponse,
 )
+from deepscout.api.security import require_api_principal
+from deepscout.config import get_settings
 from deepscout.models.hitl import HumanReview
 
 
@@ -51,6 +56,7 @@ def _response_from_result(thread_id: str, result: dict) -> ResearchResponse:
     raw_interrupts = result.get("__interrupt__", [])
     interrupts = _jsonable(raw_interrupts)
     status = "interrupted" if raw_interrupts else "completed"
+    RESEARCH_RUNS.labels(status).inc()
     return ResearchResponse(
         thread_id=thread_id,
         status=status,
@@ -79,8 +85,10 @@ async def _stream_graph(
             id=str(event_id),
         )
     event_id += 1
+    run_status = "interrupted" if interrupted else "completed"
+    RESEARCH_RUNS.labels(run_status).inc()
     yield ServerSentEvent(
-        data={"thread_id": thread_id, "status": "interrupted" if interrupted else "completed"},
+        data={"thread_id": thread_id, "status": run_status},
         event="paused" if interrupted else "done",
         id=str(event_id),
     )
@@ -99,19 +107,34 @@ def create_app(*, graph: Any | None = None) -> FastAPI:
             app.state.graph = runtime_graph
             yield
 
-    app = FastAPI(title="DeepScout API", version="0.3.1", lifespan=lifespan)
+    app = FastAPI(title="DeepScout API", version=__version__, lifespan=lifespan)
+    app.add_middleware(ObservabilityMiddleware)
 
     @app.get("/healthz")
     async def healthz() -> dict:
         return {"status": "ok"}
 
-    @app.post("/v1/research", response_model=ResearchResponse)
+    @app.get("/metrics", dependencies=[Depends(require_api_principal)])
+    async def metrics():
+        if not get_settings().api_metrics_enabled:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        return metrics_response()
+
+    @app.post(
+        "/v1/research",
+        response_model=ResearchResponse,
+        dependencies=[Depends(enforce_rate_limit)],
+    )
     async def research(request: ResearchRequest) -> ResearchResponse:
         thread_id = request.thread_id or str(uuid4())
         result = await app.state.graph.ainvoke(_initial_state(request), _config(thread_id))
         return _response_from_result(thread_id, result)
 
-    @app.post("/v1/research/stream", response_class=EventSourceResponse)
+    @app.post(
+        "/v1/research/stream",
+        response_class=EventSourceResponse,
+        dependencies=[Depends(enforce_rate_limit)],
+    )
     async def research_stream(request: ResearchRequest) -> AsyncIterator[ServerSentEvent]:
         thread_id = request.thread_id or str(uuid4())
         async for event in _stream_graph(
@@ -121,7 +144,11 @@ def create_app(*, graph: Any | None = None) -> FastAPI:
         ):
             yield event
 
-    @app.post("/v1/research/{thread_id}/resume", response_model=ResearchResponse)
+    @app.post(
+        "/v1/research/{thread_id}/resume",
+        response_model=ResearchResponse,
+        dependencies=[Depends(enforce_rate_limit)],
+    )
     async def resume(thread_id: str, request: ResumeRequest) -> ResearchResponse:
         review = HumanReview.model_validate(request.model_dump())
         result = await app.state.graph.ainvoke(
@@ -130,7 +157,11 @@ def create_app(*, graph: Any | None = None) -> FastAPI:
         )
         return _response_from_result(thread_id, result)
 
-    @app.post("/v1/research/{thread_id}/resume/stream", response_class=EventSourceResponse)
+    @app.post(
+        "/v1/research/{thread_id}/resume/stream",
+        response_class=EventSourceResponse,
+        dependencies=[Depends(enforce_rate_limit)],
+    )
     async def resume_stream(
         thread_id: str,
         request: ResumeRequest,
@@ -140,7 +171,11 @@ def create_app(*, graph: Any | None = None) -> FastAPI:
         async for event in _stream_graph(app.state.graph, command, thread_id):
             yield event
 
-    @app.get("/v1/research/{thread_id}", response_model=ThreadStateResponse)
+    @app.get(
+        "/v1/research/{thread_id}",
+        response_model=ThreadStateResponse,
+        dependencies=[Depends(enforce_rate_limit)],
+    )
     async def thread_state(thread_id: str) -> ThreadStateResponse:
         snapshot = await app.state.graph.aget_state(_config(thread_id))
         return ThreadStateResponse(

@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: public.ecr.aws/docker/library/postgres:16-alpine
+    environment:
+      POSTGRES_DB: deepscout
+      POSTGRES_USER: deepscout
+      POSTGRES_PASSWORD: ${DEEPSCOUT_POSTGRES_PASSWORD:?set DEEPSCOUT_POSTGRES_PASSWORD}
+    volumes:
+      - deepscout-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deepscout -d deepscout"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${DEEPSCOUT_API_PORT:-8000}:8000"
+    environment:
+      DEEPSCOUT_API_HOST: 0.0.0.0
+      DEEPSCOUT_API_PORT: 8000
+      DEEPSCOUT_API_CHECKPOINT: postgres
+      DEEPSCOUT_POSTGRES_DSN: postgresql://deepscout:${DEEPSCOUT_POSTGRES_PASSWORD}@postgres:5432/deepscout
+      DEEPSCOUT_API_KEY: ${DEEPSCOUT_API_KEY:?set DEEPSCOUT_API_KEY}
+      DEEPSCOUT_API_RATE_LIMIT_REQUESTS: ${DEEPSCOUT_API_RATE_LIMIT_REQUESTS:-60}
+      DEEPSCOUT_API_RATE_LIMIT_WINDOW_SECONDS: ${DEEPSCOUT_API_RATE_LIMIT_WINDOW_SECONDS:-60}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-deepscout}
+    restart: unless-stopped
+
+volumes:
+  deepscout-postgres:
