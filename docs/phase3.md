@@ -65,7 +65,7 @@ Docker 镜像使用非 root UID 10001，默认绑定 `0.0.0.0:8000` 并携带 HE
 
 ## 真实 Provider E2E 状态
 
-`scripts/check_live_e2e.py` 会检测当前模型对应的 Provider Key 与 Tavily Key，并运行低预算完整 Research Graph smoke。当前服务器缺少 Anthropic 与 Tavily 凭据，实际执行结果为 `blocked_missing_credentials`；因此 Provider + Tavily E2E 仍不是 passed。
+`scripts/check_live_e2e.py` 现在采用分层诊断：先独立执行 Provider Probe，再执行 Tavily Probe，最后运行低预算完整 Research Graph；每一阶段输出状态、耗时和安全元数据，并可写入 JSON 文件。当前服务器缺少 Anthropic 与 Tavily 凭据，实际执行结果仍为 `blocked_missing_credentials`；因此 Provider + Tavily E2E 仍不是 passed。
 
 ## 当前边界
 

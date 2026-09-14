@@ -1,9 +1,9 @@
 {
   "project": "DeepScout",
-  "version": "0.3.2",
-  "phase": "Phase 3 - batch 3",
+  "version": "0.3.3",
+  "phase": "Phase 3 - batch 3.1",
   "validation": {
-    "pytest": "45 passed",
+    "pytest": "47 passed",
     "ruff": "passed",
     "graph_compile": "passed",
     "fastapi_sse": "passed",
@@ -22,6 +22,7 @@
     "docker_healthcheck_metadata": "passed",
     "compose_config": "passed_yaml_structure",
     "compose_runtime": "not_run_no_compose_frontend",
-    "live_provider_tavily_e2e": "blocked_missing_credentials"
+    "live_provider_tavily_e2e": "blocked_missing_credentials",
+    "live_e2e_diagnostic_harness": "passed_staged_provider_tavily_graph"
   }
 }

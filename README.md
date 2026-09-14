@@ -13,7 +13,7 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.3.2 / Phase 3 第三批**：在耐久执行与服务化基础上，
+> 当前版本为 **v0.3.3 / Phase 3 第三批补丁**：在耐久执行与服务化基础上，
 > 新增真实 MCP 双传输联调、API 认证与限流、Prometheus/结构化日志，以及非 root 容器部署。
 > 真实 LLM Provider + Tavily 端到端研究 harness 已就绪，但当前服务器缺少所需凭据，因此仍未标记为通过。
 
@@ -215,7 +215,7 @@ Phase 3 第三批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：45/45 通过；
+- `pytest`：47/47 通过；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -224,6 +224,7 @@ Phase 3 第三批当前代码已在项目隔离环境中完成验证：
 - API：认证、限流、Request ID 与 Prometheus 指标测试通过；
 - 容器：真实构建与运行 smoke 通过，非 root 运行；
 - Live Provider：当前因缺少 Provider/Tavily 凭据而阻塞；
+- Live E2E 诊断：已拆分为 Provider Probe → Tavily Probe → Full Graph 三阶段，并支持 JSON 结果输出与阶段级故障定位；
 - GitHub Actions：CI 在每次 push 后执行 Install、Ruff、Tests；远端结果以当前提交对应的 workflow run 为准。
 
 ## 后续路线
