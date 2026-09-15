@@ -1,6 +1,6 @@
 # Phase 4：Benchmark 与轨迹级评测
 
-Phase 4 分三批推进：第一批建立可复现 Benchmark/trajectory 基座；第二批加入可复现 Ablation Matrix；第三批加入重复实验、描述统计、bootstrap 置信区间和 CSV/Markdown/SVG 报告。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造质量、消融或统计显著性结论。
+Phase 4 分四批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实显著性结论。
 
 ## Benchmark Corpus
 
@@ -132,9 +132,23 @@ uv run python scripts/run_repeated_ablation.py --validate-only --repetitions 5
 uv run python scripts/run_repeated_ablation.py --limit 1 --repetitions 2
 ```
 
+## 第四批：显著性检验与效应量
+
+重复实验报告完成后，`run_repeated_ablation.py` 会对同一批 completed pairs 继续构建推断统计。主检验是 two-sided paired sign-flip randomization test：non-zero pairs 数不超过阈值时穷举全部符号组合，超过阈值后使用固定 seed 的 Monte Carlo sign-flip，并使用 add-one 修正避免报告零 p 值。次要稳健性检验为基于 midrank 动态规划得到 exact null distribution 的 Wilcoxon signed-rank。
+
+效应量同时报告 Cohen’s dz 与 matched rank-biserial correlation。Cliff’s delta 也输出，但明确标记为 supplementary unpaired effect size，因为它不利用当前实验的配对结构。
+
+全局比较采用 `profile_across_cases`：先在每个 case 内对相同 repetition 的 profile/baseline 做配对，再将每个 case 的平均 paired delta 作为统计单元。固定 Case 的 repetition-level 结果使用 `profile_case`。这样不会把 `6 cases × N repetitions` 直接当成彼此独立的 6N 个样本。
+
+主 permutation p-value 在每个 `(scope, case, metric)` family 内对 5 个非 baseline profile 同时计算 Holm–Bonferroni 与 Benjamini–Hochberg 校正。校正不会因某个 profile 全部失败而缩小 family：无有效 pair 的计划比较保留为 `p=1`。当前校正不跨 metric；确认性分析应预先指定主 metric，或增加跨 metric 的二级校正。
+
+当前 6-case Core Corpus 还有一个必须明确的统计边界：6 个 non-zero case units 的 two-sided exact sign-flip raw 最小 p 为 `2/2^6 = 0.03125`，但 5-profile Holm family 的理论最小 adjusted p 约为 `0.15625`。因此现有 Core Corpus 无法在 `alpha=0.05` 下产生 Holm-confirmatory 的全局结论。family size=5 时至少需要 8 个 non-zero paired units 才具有理论可达性。默认每 Case 仅 5 repetitions 时，Case 内 raw 最小 p 更是 `0.0625`。
+
+输出新增 `significance.json`、`significance.csv`、`significance.md`、`charts/significance_effect_sizes.svg` 与 `charts/significance_holm_p.svg`。报告同时写入 theoretical exact p floor、有限 Monte Carlo resamples 的 reportable p floor 与 Holm floor，避免将“检验分辨率不足”误读成“没有效应”。
+
 ## 当前验证边界
 
-第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证 profile 顺序轮转、失败样本语义、mean/std/median/p50/p95、确定性 bootstrap CI、配对 delta、CSV/Markdown/SVG 输出。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
+第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH、p-value 分辨率以及 significance CSV/Markdown/SVG 输出。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
 
 真实 Provider + Tavily 仍因服务器缺少凭据而阻塞，因此 `core.json` 当前只有 Case/阈值定义，没有提交伪造的真实结果文件。
 

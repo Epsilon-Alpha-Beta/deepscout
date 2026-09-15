@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.4.2 / Phase 4 第三批重复实验与统计层**：保留 Benchmark/Ablation 基座，
-> 新增重复运行协议、mean/std/median/p50/p95、确定性 bootstrap 置信区间、配对 baseline delta，以及 CSV/Markdown/SVG 报告。
-> 当前仍只用 synthetic fixture 验证统计管线；真实 LLM Provider + Tavily 缺少凭据，因此不提交伪造的真实性能或显著性结论。
+> 当前版本为 **v0.4.3 / Phase 4 第四批显著性检验与效应量**：保留 Benchmark/Ablation/Repeated 基座，
+> 新增 paired sign-flip permutation、Wilcoxon signed-rank、Cohen’s dz、matched rank-biserial、Cliff’s delta，以及 Holm/BH 多重比较校正。
+> 当前仍只用 synthetic fixture 验证推断统计管线；真实 LLM Provider + Tavily 缺少凭据，因此不提交伪造的真实显著性结论。
 
 ## 系统架构
 
@@ -242,13 +242,23 @@ Ablation 报告输出 quality/citation/source-diversity 与 replan/evidence/sear
 
 只校验计划而不调用 Provider：`uv run python scripts/run_repeated_ablation.py --validate-only --repetitions 5`。真实运行可使用 `uv run python scripts/run_repeated_ablation.py --repetitions 5 --output-dir benchmark-results/repeated-ablation-latest`；默认 5 次更适合 smoke，正式统计结论应提高重复次数并优先检查 profile×case 与配对 delta。
 
+## Phase 4 第四批：显著性检验与效应量
+
+重复实验完成后，同一 CLI 会自动生成 `significance.json / significance.csv / significance.md`，主检验采用配对 sign-flip randomization/permutation test，辅以 exact dynamic-programming Wilcoxon signed-rank。配对效应量包括 Cohen’s dz 与 matched rank-biserial；Cliff’s delta 明确作为忽略配对结构的补充效应量。
+
+多重比较以“同一 scope + case + metric 下的非 baseline profiles”为 family，对主 permutation p-value 同时计算 Holm–Bonferroni（FWER）和 Benjamini–Hochberg（FDR）。全局 `profile_across_cases` 不把 case×repetition 当成独立样本，而是先对每个 case 的重复配对差求均值，再以 case 为统计单元。
+
+报告还显式计算 exact sign-flip 的理论最小 p、Monte Carlo 可报告最小 p 与 Holm 后的分辨率下限。当前 Core Corpus 只有 6 cases、每个 metric 有 5 个非 baseline profile 比较，因此 raw exact 最小 p 为 `0.03125`，但最理想的 Holm 下限仍约为 `0.15625`；也就是说，当前 6-case Core Corpus **不可能**产生 `Holm-adjusted p < 0.05` 的全局确认性结论。`alpha=0.05`、family size=5 时理论上至少需要 8 个 non-zero paired units 才具备 Holm 可达性。
+
+新增 SVG 包括 `significance_effect_sizes.svg` 和 `significance_holm_p.svg`。p-value 只描述与零效应的一致程度，正式判断仍应结合 paired delta CI、效应量、完成率和原始 run。当前多重校正只覆盖同一 metric 内的 profile family；跨 metric 的确认性声明应预注册主指标或进一步校正。
+
 ## 当前验证状态
 
-Phase 4 第三批当前代码已在项目隔离环境中完成验证：
+Phase 4 第四批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：73/73 通过（包含真实 Redis、Benchmark、Ablation 与重复统计测试）；
+- `pytest`：81/81 通过（包含真实 Redis、Benchmark、Ablation、重复统计与显著性检验测试）；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -264,4 +274,4 @@ Phase 4 第三批当前代码已在项目隔离环境中完成验证：
 
 **Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
-**Phase 4 后续**：真实 Provider 凭据可用后执行多次真实重复实验，并补充跨 run 显著性检验、真实成本、人工/外部事实正确率评审与更完整可视化。
+**Phase 4 后续**：真实 Provider 凭据可用后执行多次真实重复实验；扩充 Core Corpus 以满足确认性检验分辨率，并补充真实成本、人工/外部事实正确率评审与更完整可视化。

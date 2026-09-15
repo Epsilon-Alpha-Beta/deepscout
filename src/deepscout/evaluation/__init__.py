@@ -43,6 +43,21 @@ from deepscout.evaluation.repeated_report import (
 )
 from deepscout.evaluation.report import build_report, render_markdown, save_report
 from deepscout.evaluation.runner import load_corpus, run_case, run_corpus
+from deepscout.evaluation.significance import (
+    SignificanceComparison,
+    SignificanceReport,
+    benjamini_hochberg_adjust,
+    build_significance_report,
+    cliffs_delta,
+    cohen_dz,
+    holm_adjust,
+    paired_sign_flip_test,
+    wilcoxon_signed_rank_exact,
+)
+from deepscout.evaluation.significance_report import (
+    render_significance_markdown,
+    save_significance_report,
+)
 from deepscout.evaluation.statistics import (
     DistributionStatistics,
     bootstrap_mean_ci,
@@ -73,6 +88,17 @@ __all__ = [
     "RepeatedRunRecord",
     "RepeatedScopeStatistics",
     "TrajectoryEvent",
+    "SignificanceComparison",
+    "SignificanceReport",
+    "benjamini_hochberg_adjust",
+    "build_significance_report",
+    "cliffs_delta",
+    "cohen_dz",
+    "holm_adjust",
+    "paired_sign_flip_test",
+    "render_significance_markdown",
+    "save_significance_report",
+    "wilcoxon_signed_rank_exact",
     "TrajectoryRecorder",
     "build_ablation_report",
     "bootstrap_mean_ci",

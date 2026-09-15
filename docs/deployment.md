@@ -20,7 +20,7 @@ uv run python scripts/run_api.py
 构建示例：
 
 ```bash
-podman build --format docker -t deepscout:0.4.2 .
+podman build --format docker -t deepscout:0.4.3 .
 ```
 
 运行时只通过环境变量注入 Provider、Tavily、数据库、Redis 和 API 凭据，不将任何 secret 写入镜像层。
