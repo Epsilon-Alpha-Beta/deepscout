@@ -18,6 +18,7 @@ def build_report(corpus: BenchmarkCorpus, results: list[BenchmarkRunResult]) -> 
     passed = sum(result.passed for result in results)
     quality = sum(result.metrics.quality_proxy_score for result in results)
     citation = sum(result.metrics.citation_coverage for result in results)
+    diversity = sum(result.metrics.source_diversity_ratio for result in results)
     known_costs = [
         result.metrics.estimated_tracked_cost_usd
         for result in results
@@ -31,6 +32,9 @@ def build_report(corpus: BenchmarkCorpus, results: list[BenchmarkRunResult]) -> 
         pass_rate=passed / total if total else 0.0,
         average_quality_proxy_score=quality / total if total else 0.0,
         average_citation_coverage=citation / total if total else 0.0,
+        average_source_diversity_ratio=diversity / total if total else 0.0,
+        total_replans=sum(result.metrics.replan_count for result in results),
+        total_evidence_count=sum(result.metrics.evidence_count for result in results),
         total_search_calls=sum(result.metrics.search_calls for result in results),
         total_research_tokens=sum(result.metrics.research_tokens for result in results),
         total_worker_seconds=sum(result.metrics.worker_seconds for result in results),
@@ -57,6 +61,9 @@ def render_markdown(report: BenchmarkReport) -> str:
         f"- Pass rate: {summary.pass_rate:.1%}",
         f"- Avg quality proxy: {summary.average_quality_proxy_score:.3f}",
         f"- Avg citation coverage: {summary.average_citation_coverage:.3f}",
+        f"- Avg source diversity: {summary.average_source_diversity_ratio:.3f}",
+        f"- Replans: {summary.total_replans}",
+        f"- Evidence items: {summary.total_evidence_count}",
         f"- Search calls: {summary.total_search_calls}",
         f"- Research tokens: {summary.total_research_tokens}",
         f"- Worker seconds: {summary.total_worker_seconds:.3f}",

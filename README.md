@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.4.0 / Phase 4 第一批评测基座**：Phase 3 的 MCP、耐久执行、HITL、服务化与生产硬化能力保持不变，
-> 新增版本化 Benchmark Corpus、低敏感 trajectory recorder、质量/引用/资源/延迟指标、可选成本估算，以及 JSON/Markdown 报告。
-> 当前仅使用 synthetic fixture 验证评测管线；真实 LLM Provider + Tavily 仍因服务器缺少凭据而未产生真实 Benchmark 成绩。
+> 当前版本为 **v0.4.1 / Phase 4 第二批消融评测**：Phase 3 的生产工程能力与 v0.4.0 Benchmark 基座保持不变，
+> 新增可复现 Ablation Matrix、ContextVar Settings override、Graph 结构开关，以及 baseline delta 对比报告。
+> 当前仍只用 synthetic fixture 验证实验管线；真实 LLM Provider + Tavily 缺少凭据，因此不提交伪造的真实消融成绩。
 
 ## 系统架构
 
@@ -224,13 +224,21 @@ Trajectory 只记录节点名、相对耗时和输出字段名，不保存模型
 
 Benchmark 输出为 `report.json` 与 `report.md`；当前 synthetic fixture 只证明指标、阈值、异常归档和报告管线正确，不代表真实 Provider Benchmark 分数。详见 `docs/phase4.md`。
 
+## Phase 4 第二批：Ablation Matrix
+
+新增 `benchmarks/ablations/core.json` 与 `scripts/run_ablation.py`。默认矩阵包含 `full`、`no-replan`、`no-citation-feedback`、`no-evidence-dedup`、`low-budget`、`serial-research` 六个 profile，并在同一 Corpus 上顺序运行，避免 profile 间资源竞争污染 wall-time。
+
+`no-citation-feedback` 保留 Citation Verifier 作为统一测量仪器，只禁止引用缺口触发重规划；这样 citation coverage 仍可与 baseline 同口径比较。Settings override 基于 `ContextVar`，会传播到 asyncio 子任务但在 profile 结束后自动恢复；GraphOptions 则显式控制 citation feedback 与 evidence dedup。
+
+Ablation 报告输出 quality/citation/source-diversity 与 replan/evidence/search/token/wall-time/tracked-cost 的 baseline delta，同时保留每个 profile 的独立 Benchmark report。验证矩阵可运行 `uv run python scripts/run_ablation.py --validate-only`。
+
 ## 当前验证状态
 
-Phase 4 第一批当前代码已在项目隔离环境中完成验证：
+Phase 4 第二批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：58/58 通过（包含真实 Redis 集成测试与 Phase 4 评测管线测试）；
+- `pytest`：67/67 通过（包含真实 Redis、Benchmark 与 Ablation 测试）；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -246,4 +254,4 @@ Phase 4 第一批当前代码已在项目隔离环境中完成验证：
 
 **Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
-**Phase 4 后续**：在同一 Corpus 上加入消融矩阵、重复实验/方差统计、真实 Provider 成本与延迟对比，以及结果可视化。
+**Phase 4 后续**：在真实 Provider 凭据可用后执行重复实验/方差统计，并补充真实成本与延迟对比、可视化和人工/外部质量评审。

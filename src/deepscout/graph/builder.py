@@ -1,5 +1,7 @@
 """构建 DeepScout Phase 3 LangGraph。"""
 
+from functools import partial
+
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
@@ -11,6 +13,7 @@ from deepscout.agents.human_review import human_review
 from deepscout.agents.planner import planner
 from deepscout.agents.researcher import researcher
 from deepscout.agents.writer import writer
+from deepscout.graph.options import GraphOptions
 from deepscout.graph.routing import (
     dispatch_ready_tasks,
     route_after_citation_verifier,
@@ -22,7 +25,12 @@ from deepscout.runtime.budget import sync_budget
 from deepscout.runtime.retry import llm_retry_policy
 
 
-def build_graph(*, checkpointer: BaseCheckpointSaver | None = None):
+def build_graph(
+    *,
+    checkpointer: BaseCheckpointSaver | None = None,
+    options: GraphOptions | None = None,
+):
+    options = options or GraphOptions()
     builder = StateGraph(DeepScoutState)
     retry_policy = llm_retry_policy()
 
@@ -30,7 +38,10 @@ def build_graph(*, checkpointer: BaseCheckpointSaver | None = None):
     builder.add_node("planner", planner, retry_policy=retry_policy)
     builder.add_node("supervisor", sync_budget)
     builder.add_node("researcher", researcher)
-    builder.add_node("evidence_manager", evidence_manager)
+    builder.add_node(
+        "evidence_manager",
+        partial(evidence_manager, deduplicate=options.evidence_dedup_enabled),
+    )
     builder.add_node("critic", critic, retry_policy=retry_policy)
     builder.add_node("writer", writer, retry_policy=retry_policy)
     builder.add_node(
@@ -58,7 +69,10 @@ def build_graph(*, checkpointer: BaseCheckpointSaver | None = None):
     builder.add_edge("writer", "citation_verifier")
     builder.add_conditional_edges(
         "citation_verifier",
-        route_after_citation_verifier,
+        partial(
+            route_after_citation_verifier,
+            allow_replan=options.citation_feedback_enabled,
+        ),
         {"planner": "planner", "human_review": "human_review"},
     )
     builder.add_conditional_edges(

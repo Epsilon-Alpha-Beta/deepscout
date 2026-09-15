@@ -1,5 +1,8 @@
 """DeepScout 运行时配置。"""
 
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import lru_cache
 from typing import Any, Literal
 
@@ -55,6 +58,41 @@ class Settings(BaseSettings):
         return getattr(self, f"{role}_model", None) or self.model
 
 
+_settings_override: ContextVar[Settings | None] = ContextVar(
+    "deepscout_settings_override", default=None
+)
+
+
 @lru_cache(maxsize=1)
-def get_settings() -> Settings:
+def _base_settings() -> Settings:
     return Settings()
+
+
+def get_settings() -> Settings:
+    """返回当前上下文配置；没有实验 override 时使用进程级缓存配置。"""
+    return _settings_override.get() or _base_settings()
+
+
+def clear_settings_cache() -> None:
+    """清除环境变量驱动的基础 Settings 缓存。"""
+    _base_settings.cache_clear()
+
+
+# 保持既有测试/调用方对 get_settings.cache_clear() 的兼容。
+get_settings.cache_clear = clear_settings_cache  # type: ignore[attr-defined]
+
+
+@contextmanager
+def settings_override(overrides: Mapping[str, object]) -> Iterator[Settings]:
+    """在当前 ContextVar 上下文内应用经过 Pydantic 校验的 Settings override。"""
+    unknown = sorted(set(overrides).difference(Settings.model_fields))
+    if unknown:
+        raise ValueError(f"未知 Settings override: {', '.join(unknown)}")
+    payload = get_settings().model_dump()
+    payload.update(overrides)
+    effective = Settings.model_validate(payload)
+    token = _settings_override.set(effective)
+    try:
+        yield effective
+    finally:
+        _settings_override.reset(token)

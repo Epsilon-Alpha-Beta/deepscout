@@ -1,21 +1,23 @@
 {
   "project": "DeepScout",
-  "version": "0.4.0",
-  "phase": "Phase 4 - batch 1",
+  "version": "0.4.1",
+  "phase": "Phase 4 - batch 2",
   "validation": {
     "benchmark_corpus": "passed_6_cases_schema_valid",
-    "trajectory_recorder": "passed_nodes_timing_output_keys_only",
-    "metrics_pipeline": "passed_synthetic_fixture",
-    "expectation_checks": "passed_synthetic_fixture",
-    "json_markdown_report": "passed_synthetic_fixture",
-    "cost_estimation_without_pricing": "passed_null_not_fabricated",
-    "benchmark_cli_validate_only": "passed",
+    "ablation_matrix": "passed_6_profiles_schema_valid",
+    "settings_override": "passed_contextvar_async_child_restore",
+    "graph_options": "passed_default_and_ablation_compile",
+    "citation_feedback_ablation": "passed_verifier_measurement_preserved_feedback_disabled",
+    "evidence_dedup_ablation": "passed_duplicate_observations_preserved",
+    "ablation_delta_report": "passed_synthetic_fixture",
+    "per_profile_reports": "passed_synthetic_fixture",
+    "ablation_cli_validate_only": "passed",
+    "pytest_with_redis": "67 passed",
+    "ruff": "passed",
+    "project_version": "0.4.1",
+    "container_ablation_validate": "passed_v0.4.1_nonroot_healthcheck",
     "live_provider_benchmark": "blocked_missing_credentials",
     "real_benchmark_scores": "not_run",
-    "pytest_with_redis": "58 passed",
-    "ruff": "passed",
-    "project_version": "0.4.0",
-    "container_benchmark_validate": "passed_v0.4.0_nonroot",
-    "core_corpus_ci_test": "passed"
+    "real_ablation_scores": "not_run"
   }
 }

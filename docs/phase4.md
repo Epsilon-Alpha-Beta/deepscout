@@ -1,6 +1,6 @@
 # Phase 4：Benchmark 与轨迹级评测
 
-Phase 4 第一批目标是建立**可复现、可审计、与 Provider 解耦**的评测基座，而不是在缺少真实 Provider/Tavily 凭据时伪造质量分数。
+Phase 4 分两批推进：第一批建立**可复现、可审计、与 Provider 解耦**的 Benchmark/trajectory 基座；第二批在同一 Corpus 上加入可复现 Ablation Matrix。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造质量或消融分数。
 
 ## Benchmark Corpus
 
@@ -60,12 +60,47 @@ uv run python scripts/run_benchmark.py \
 
 输出同时包含 `report.json` 与 `report.md`。Corpus 默认顺序执行，避免并发噪声污染 wall-time 对比。
 
+
+## 第二批：Ablation Matrix
+
+`benchmarks/ablations/core.json` 定义 6 个 profile：
+
+| Profile | 变化 | 目的 |
+| --- | --- | --- |
+| `full` | 完整默认配置 | baseline |
+| `no-replan` | `max_replans=0` | 测量迭代补充研究的贡献 |
+| `no-citation-feedback` | Citation Verifier 仍测量，但不触发 Planner | 避免删除测量仪器导致 citation 指标失去同口径 |
+| `no-evidence-dedup` | 保留重复 Evidence | 测量 URL/内容指纹去重价值 |
+| `low-budget` | 收紧 task/search/token/worker-time/evidence 预算 | 观察质量—资源 trade-off |
+| `serial-research` | `max_concurrency=1` | 观察并发对 wall-time/结果的影响 |
+
+Settings override 使用 `ContextVar`，会传播到 asyncio 子任务，并在 profile 结束后自动恢复，不通过进程级环境变量临时改写实验配置。结构性变化由 `GraphOptions` 显式传入 `build_graph()`。
+
+Ablation runner 按 profile **顺序执行**，每个 profile 内仍允许 Research Worker 按其并发上限运行。输出包括每个 profile 的完整 Benchmark report，以及相对 `full` baseline 的：pass rate、quality proxy、citation coverage、source diversity、replans/case、evidence/case、searches/case、research tokens/case、wall-time/case 和 tracked cost/case delta。
+
+只校验矩阵和 Corpus：
+
+```bash
+uv run python scripts/run_ablation.py --validate-only
+```
+
+真实运行（完整矩阵是 6 profiles × 6 cases = 36 次研究任务）：
+
+```bash
+uv run python scripts/run_ablation.py \
+  --corpus benchmarks/corpora/core.json \
+  --matrix benchmarks/ablations/core.json \
+  --output-dir benchmark-results/ablation-latest
+```
+
+可先用 `--limit 1` 做低成本 smoke。实验命令只有在某个 run `error/interrupted` 时返回非零；某个消融 profile 未达到 expectation 仍属于有效实验结果，不会被误判为程序执行失败。
+
 ## 当前验证边界
 
-本批次通过 synthetic final-state 与 fake streamed graph 验证指标计算、轨迹隐私、阈值判定、异常归档和 JSON/Markdown 报告生成。该 fixture 只证明评测基础设施正确，不代表真实 Provider 的 Benchmark 成绩。
+第一批使用 synthetic final-state 与 fake streamed graph 验证指标计算、轨迹隐私、阈值判定、异常归档和 JSON/Markdown 报告生成；第二批继续使用 synthetic profile graph 验证 Settings/Graph 消融语义、baseline delta、profile report 与矩阵拓扑校验。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation 成绩。
 
 真实 Provider + Tavily 仍因服务器缺少凭据而阻塞，因此 `core.json` 当前只有 Case/阈值定义，没有提交伪造的真实结果文件。
 
 ## 后续批次
 
-下一批将加入可配置消融矩阵，例如关闭 replan、citation verifier、evidence dedup 或改变并发/预算，并在同一 Corpus 上比较质量代理、搜索量、token、延迟和成本。真实 Provider 凭据可用后，再执行多次重复实验与方差统计。
+真实 Provider 凭据可用后，优先执行重复实验与方差/置信区间统计，并补充真实 Provider 成本、延迟、人工或外部事实正确率评审和可视化。对于 citation 消融继续保持“保留 verifier 测量、只关闭 feedback”的实验设计，避免测量口径随处理组变化。

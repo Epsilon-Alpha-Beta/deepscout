@@ -36,8 +36,8 @@ def content_fingerprint(content: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-def _evidence_id(canonical_url: str, content_hash: str) -> str:
-    raw = f"{canonical_url}|{content_hash}".encode()
+def _evidence_id(canonical_url: str, content_hash: str, *, salt: str = "") -> str:
+    raw = f"{canonical_url}|{content_hash}|{salt}".encode()
     return "ev_" + hashlib.sha256(raw).hexdigest()[:12]
 
 
@@ -45,10 +45,13 @@ def consolidate_evidence(
     results: list[TaskResult],
     *,
     max_items: int,
+    deduplicate: bool = True,
 ) -> list[ManagedEvidence]:
-    """扁平化并去重所有成功任务的证据。"""
+    """扁平化成功任务的证据；默认按 URL/内容指纹去重。"""
     merged: dict[str, ManagedEvidence] = {}
     content_index: dict[str, str] = {}
+    collected: list[ManagedEvidence] = []
+    occurrence = 0
 
     for result in results:
         if result.status != "completed":
@@ -59,7 +62,7 @@ def consolidate_evidence(
             key = canonical
             existing_key = key if key in merged else content_index.get(fingerprint)
 
-            if existing_key is not None:
+            if deduplicate and existing_key is not None:
                 current = merged[existing_key]
                 current.duplicate_count += 1
                 current.claims = sorted(set(current.claims).union(item.claims))
@@ -70,8 +73,13 @@ def consolidate_evidence(
                     )
                 continue
 
+            occurrence += 1
             managed = ManagedEvidence(
-                evidence_id=_evidence_id(canonical, fingerprint),
+                evidence_id=_evidence_id(
+                    canonical,
+                    fingerprint,
+                    salt="" if deduplicate else str(occurrence),
+                ),
                 title=item.title,
                 url=str(item.url),
                 canonical_url=canonical,
@@ -82,14 +90,20 @@ def consolidate_evidence(
                 relevance_score=item.relevance_score,
                 claims=sorted(set(item.claims)),
             )
-            merged[key] = managed
-            content_index[fingerprint] = key
-            if len(merged) >= max_items:
+            if deduplicate:
+                merged[key] = managed
+                content_index[fingerprint] = key
+            else:
+                collected.append(managed)
+
+            current_size = len(merged) if deduplicate else len(collected)
+            if current_size >= max_items:
                 break
-        if len(merged) >= max_items:
+        current_size = len(merged) if deduplicate else len(collected)
+        if current_size >= max_items:
             break
 
-    return list(merged.values())
+    return list(merged.values()) if deduplicate else collected
 
 
 def _claim_key(claim: str) -> str:

@@ -1,0 +1,50 @@
+{
+  "name": "deepscout-core-ablation",
+  "version": "1.0.0",
+  "baseline_profile": "full",
+  "profiles": [
+    {
+      "name": "full",
+      "description": "完整 DeepScout：保留重规划、引用反馈、证据去重与默认预算。"
+    },
+    {
+      "name": "no-replan",
+      "description": "关闭 Critic/Citation/HITL 触发后的重规划预算，用于衡量迭代补充研究的贡献。",
+      "settings": {
+        "max_replans": 0
+      }
+    },
+    {
+      "name": "no-citation-feedback",
+      "description": "引用验证仍执行并用于统一测量，但其证据缺口不再触发 Planner 重规划。",
+      "graph": {
+        "citation_feedback_enabled": false
+      }
+    },
+    {
+      "name": "no-evidence-dedup",
+      "description": "保留重复 Evidence 项，用于衡量 URL/内容指纹去重对证据质量与成本代理指标的影响。",
+      "graph": {
+        "evidence_dedup_enabled": false
+      }
+    },
+    {
+      "name": "low-budget",
+      "description": "收紧研究任务、搜索、Research Worker token 与 worker-time 预算。",
+      "settings": {
+        "max_research_tasks": 8,
+        "max_evidence_items": 30,
+        "max_searches": 12,
+        "max_research_tokens": 50000,
+        "max_worker_seconds": 300.0
+      }
+    },
+    {
+      "name": "serial-research",
+      "description": "将 Research Worker 并发上限降为 1，用于比较并发对 wall time 与结果指标的影响。",
+      "settings": {
+        "max_concurrency": 1
+      }
+    }
+  ]
+}

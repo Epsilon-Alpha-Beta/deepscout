@@ -88,10 +88,10 @@ def route_after_critic(state: DeepScoutState) -> str:
     return "writer"
 
 
-def route_after_citation_verifier(state: DeepScoutState) -> str:
+def route_after_citation_verifier(state: DeepScoutState, *, allow_replan: bool = True) -> str:
     report = state["citation_report"]
     budget = state["budget"]
-    if report.requires_research and budget.can_replan:
+    if allow_replan and report.requires_research and budget.can_replan:
         return "planner"
     return "human_review"
 
