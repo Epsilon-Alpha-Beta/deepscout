@@ -1,23 +1,24 @@
 {
   "project": "DeepScout",
-  "version": "0.4.1",
-  "phase": "Phase 4 - batch 2",
+  "version": "0.4.2",
+  "phase": "Phase 4 - batch 3",
   "validation": {
     "benchmark_corpus": "passed_6_cases_schema_valid",
     "ablation_matrix": "passed_6_profiles_schema_valid",
-    "settings_override": "passed_contextvar_async_child_restore",
-    "graph_options": "passed_default_and_ablation_compile",
-    "citation_feedback_ablation": "passed_verifier_measurement_preserved_feedback_disabled",
-    "evidence_dedup_ablation": "passed_duplicate_observations_preserved",
-    "ablation_delta_report": "passed_synthetic_fixture",
-    "per_profile_reports": "passed_synthetic_fixture",
-    "ablation_cli_validate_only": "passed",
-    "pytest_with_redis": "67 passed",
+    "repeated_experiment_protocol": "passed_repetition_major_rotating_profile_order",
+    "distribution_statistics": "passed_mean_std_median_p50_p95",
+    "confidence_interval": "passed_deterministic_percentile_bootstrap_mean",
+    "paired_baseline_delta": "passed_same_repetition_case_completed_pairs_only",
+    "failed_run_semantics": "passed_retained_not_zero_filled",
+    "csv_reports": "passed_runs_statistics_deltas",
+    "markdown_report": "passed_full_profile_distributions_and_delta_summary",
+    "svg_charts": "passed_absolute_and_paired_delta_parseable",
+    "repeated_cli_validate_only": "passed_180_planned_default_runs",
+    "pytest_with_redis": "73 passed",
     "ruff": "passed",
-    "project_version": "0.4.1",
-    "container_ablation_validate": "passed_v0.4.1_nonroot_healthcheck",
+    "project_version": "0.4.2",
+    "container_repeated_validate": "passed_v0.4.2_nonroot_healthcheck",
     "live_provider_benchmark": "blocked_missing_credentials",
-    "real_benchmark_scores": "not_run",
-    "real_ablation_scores": "not_run"
+    "real_repeated_scores": "not_run"
   }
 }

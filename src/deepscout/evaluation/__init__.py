@@ -30,8 +30,25 @@ from deepscout.evaluation.models import (
     ExpectationCheck,
     TrajectoryEvent,
 )
+from deepscout.evaluation.repeated import (
+    RepeatedExperimentReport,
+    RepeatedRunRecord,
+    RepeatedScopeStatistics,
+    build_repeated_report,
+    run_repeated_ablation,
+)
+from deepscout.evaluation.repeated_report import (
+    render_repeated_markdown,
+    save_repeated_report,
+)
 from deepscout.evaluation.report import build_report, render_markdown, save_report
 from deepscout.evaluation.runner import load_corpus, run_case, run_corpus
+from deepscout.evaluation.statistics import (
+    DistributionStatistics,
+    bootstrap_mean_ci,
+    percentile,
+    summarize_distribution,
+)
 from deepscout.evaluation.trajectory import TrajectoryRecorder
 
 __all__ = [
@@ -51,20 +68,31 @@ __all__ = [
     "BenchmarkRunResult",
     "BenchmarkSummary",
     "ExpectationCheck",
+    "DistributionStatistics",
+    "RepeatedExperimentReport",
+    "RepeatedRunRecord",
+    "RepeatedScopeStatistics",
     "TrajectoryEvent",
     "TrajectoryRecorder",
     "build_ablation_report",
+    "bootstrap_mean_ci",
     "build_report",
+    "build_repeated_report",
     "calculate_metrics",
     "compare_to_baseline",
     "evaluate_expectations",
     "load_ablation_matrix",
     "load_corpus",
+    "percentile",
     "render_ablation_markdown",
     "render_markdown",
+    "render_repeated_markdown",
     "run_ablation_matrix",
     "run_case",
     "run_corpus",
+    "run_repeated_ablation",
     "save_ablation_report",
     "save_report",
+    "summarize_distribution",
+    "save_repeated_report",
 ]

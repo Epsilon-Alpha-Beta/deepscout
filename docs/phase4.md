@@ -1,6 +1,6 @@
 # Phase 4：Benchmark 与轨迹级评测
 
-Phase 4 分两批推进：第一批建立**可复现、可审计、与 Provider 解耦**的 Benchmark/trajectory 基座；第二批在同一 Corpus 上加入可复现 Ablation Matrix。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造质量或消融分数。
+Phase 4 分三批推进：第一批建立可复现 Benchmark/trajectory 基座；第二批加入可复现 Ablation Matrix；第三批加入重复实验、描述统计、bootstrap 置信区间和 CSV/Markdown/SVG 报告。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造质量、消融或统计显著性结论。
 
 ## Benchmark Corpus
 
@@ -95,12 +95,49 @@ uv run python scripts/run_ablation.py \
 
 可先用 `--limit 1` 做低成本 smoke。实验命令只有在某个 run `error/interrupted` 时返回非零；某个消融 profile 未达到 expectation 仍属于有效实验结果，不会被误判为程序执行失败。
 
+## 第三批：重复实验与统计
+
+`scripts/run_repeated_ablation.py` 在同一个 profile/case 上执行多次 repetition，并保留每个原始 `BenchmarkRunResult`。默认执行顺序采用 `rotate`：每轮轮转 profile 起始位置，减少固定 profile 总是先跑或后跑造成的时间漂移偏差；也可显式选择 `fixed`。
+
+统计层计算 `mean`、sample `std`、`median`、`p50`、`p95`。均值置信区间默认使用 95% percentile bootstrap；默认 2000 次 resample，并使用稳定 seed 派生每个 scope/metric 的 bootstrap seed，因此同一输入可复现。样本数为 1 时 CI 退化为该观测值。
+
+profile 与 baseline 的 delta 不使用“两个总体均值直接相减”，而是先按 `(repetition, case)` 配对，仅当二者都 completed 时计算 profile−baseline，再对配对差值做同样的分布统计。error/interrupted 计入 attempted/error/interrupted/completion rate，但不会以 0 值进入数值统计。
+
+输出结构：
+
+```text
+benchmark-results/repeated-ablation-latest/
+├── repeated.json
+├── report.md
+├── runs.csv
+├── statistics.csv
+├── deltas.csv
+└── charts/
+    ├── quality_proxy_score.svg
+    ├── citation_coverage.svg
+    ├── search_calls.svg
+    ├── research_tokens.svg
+    ├── wall_seconds.svg
+    ├── delta_quality_proxy_score.svg
+    ├── delta_search_calls.svg
+    └── delta_wall_seconds.svg
+```
+
+`statistics.csv` 与 `deltas.csv` 都显式包含 `count / mean / std / median / p50 / p95 / ci_low / ci_high / confidence_level`。Markdown 中也展示 profile 级完整分布，不要求读者必须打开 CSV。SVG 由标准库直接生成，不增加 matplotlib 等运行时依赖。
+
+默认完整实验是 `6 profiles × 6 cases × 5 repetitions = 180 runs`，成本可能很高。默认 5 次更适合工程 smoke；真实 LLM 的方差、p95 与 CI 若要用于正式结论，应提高 repetition 数并结合预算评估。profile 级 pooled statistics 是跨 case 的描述性汇总，严格比较时应优先检查 `profile_case_statistics` 与同一 `(repetition, case)` 的配对 delta。正式跑真实 Provider 前建议先执行：
+
+```bash
+uv run python scripts/run_repeated_ablation.py --validate-only --repetitions 5
+uv run python scripts/run_repeated_ablation.py --limit 1 --repetitions 2
+```
+
 ## 当前验证边界
 
-第一批使用 synthetic final-state 与 fake streamed graph 验证指标计算、轨迹隐私、阈值判定、异常归档和 JSON/Markdown 报告生成；第二批继续使用 synthetic profile graph 验证 Settings/Graph 消融语义、baseline delta、profile report 与矩阵拓扑校验。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation 成绩。
+第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证 profile 顺序轮转、失败样本语义、mean/std/median/p50/p95、确定性 bootstrap CI、配对 delta、CSV/Markdown/SVG 输出。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
 
 真实 Provider + Tavily 仍因服务器缺少凭据而阻塞，因此 `core.json` 当前只有 Case/阈值定义，没有提交伪造的真实结果文件。
 
 ## 后续批次
 
-真实 Provider 凭据可用后，优先执行重复实验与方差/置信区间统计，并补充真实 Provider 成本、延迟、人工或外部事实正确率评审和可视化。对于 citation 消融继续保持“保留 verifier 测量、只关闭 feedback”的实验设计，避免测量口径随处理组变化。
+真实 Provider 凭据可用后，优先用同一套 repeated runner 生成真实重复实验数据，再补充跨 run 显著性检验、真实 Provider 完整成本、人工或外部事实正确率评审与更完整可视化。对于 citation 消融继续保持“保留 verifier 测量、只关闭 feedback”的实验设计，避免测量口径随处理组变化。

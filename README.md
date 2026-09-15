@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.4.1 / Phase 4 第二批消融评测**：Phase 3 的生产工程能力与 v0.4.0 Benchmark 基座保持不变，
-> 新增可复现 Ablation Matrix、ContextVar Settings override、Graph 结构开关，以及 baseline delta 对比报告。
-> 当前仍只用 synthetic fixture 验证实验管线；真实 LLM Provider + Tavily 缺少凭据，因此不提交伪造的真实消融成绩。
+> 当前版本为 **v0.4.2 / Phase 4 第三批重复实验与统计层**：保留 Benchmark/Ablation 基座，
+> 新增重复运行协议、mean/std/median/p50/p95、确定性 bootstrap 置信区间、配对 baseline delta，以及 CSV/Markdown/SVG 报告。
+> 当前仍只用 synthetic fixture 验证统计管线；真实 LLM Provider + Tavily 缺少凭据，因此不提交伪造的真实性能或显著性结论。
 
 ## 系统架构
 
@@ -232,13 +232,23 @@ Benchmark 输出为 `report.json` 与 `report.md`；当前 synthetic fixture 只
 
 Ablation 报告输出 quality/citation/source-diversity 与 replan/evidence/search/token/wall-time/tracked-cost 的 baseline delta，同时保留每个 profile 的独立 Benchmark report。验证矩阵可运行 `uv run python scripts/run_ablation.py --validate-only`。
 
+## Phase 4 第三批：重复实验与统计层
+
+新增 `scripts/run_repeated_ablation.py`。默认按 repetition-major 执行实验，并轮转每轮 profile 的起始顺序，降低固定时间顺序带来的系统性偏差；原始 run 按 `(repetition, profile, case)` 保留。
+
+每个数值指标计算 `mean / sample std / median / p50 / p95`，均值置信区间使用确定性 percentile bootstrap；confidence level、resample 次数和 bootstrap seed 都写入报告。profile 与 baseline 的差异按同一 `(repetition, case)` 配对后再统计，避免把非配对样本直接相减。error/interrupted run 计入完成率，但不会以 0 值混入数值分布。
+
+输出包括 `repeated.json`、`runs.csv`、`statistics.csv`、`deltas.csv`、`report.md`，以及 quality/citation/search/token/wall-time 的均值+CI SVG 和 quality/search/wall-time 的配对 delta SVG。默认 5 次重复的完整矩阵是 `6 profiles × 6 cases × 5 = 180` 次研究运行；建议先用 `--limit 1 --repetitions 2` 做低成本 smoke。
+
+只校验计划而不调用 Provider：`uv run python scripts/run_repeated_ablation.py --validate-only --repetitions 5`。真实运行可使用 `uv run python scripts/run_repeated_ablation.py --repetitions 5 --output-dir benchmark-results/repeated-ablation-latest`；默认 5 次更适合 smoke，正式统计结论应提高重复次数并优先检查 profile×case 与配对 delta。
+
 ## 当前验证状态
 
-Phase 4 第二批当前代码已在项目隔离环境中完成验证：
+Phase 4 第三批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：67/67 通过（包含真实 Redis、Benchmark 与 Ablation 测试）；
+- `pytest`：73/73 通过（包含真实 Redis、Benchmark、Ablation 与重复统计测试）；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -254,4 +264,4 @@ Phase 4 第二批当前代码已在项目隔离环境中完成验证：
 
 **Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
-**Phase 4 后续**：在真实 Provider 凭据可用后执行重复实验/方差统计，并补充真实成本与延迟对比、可视化和人工/外部质量评审。
+**Phase 4 后续**：真实 Provider 凭据可用后执行多次真实重复实验，并补充跨 run 显著性检验、真实成本、人工/外部事实正确率评审与更完整可视化。
