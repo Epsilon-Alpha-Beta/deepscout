@@ -18,16 +18,74 @@ class BenchmarkExpectations(BaseModel):
     min_keyword_recall: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
+class BenchmarkSourcePolicy(BaseModel):
+    """单个 Case 的来源质量与时效策略。"""
+
+    min_primary_sources: int = Field(default=1, ge=1)
+    preferred_domains: list[str] = Field(min_length=1)
+    primary_source_types: list[
+        Literal[
+            "official_docs",
+            "standards",
+            "academic",
+            "government",
+            "source_repository",
+            "vendor_engineering",
+        ]
+    ] = Field(min_length=1)
+    freshness_required: bool = False
+    max_age_days: int | None = Field(default=None, ge=1)
+    min_recent_sources: int = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def validate_freshness(self) -> "BenchmarkSourcePolicy":
+        if self.freshness_required and self.max_age_days is None:
+            raise ValueError("freshness_required=true 时必须配置 max_age_days。")
+        if not self.freshness_required and self.min_recent_sources:
+            raise ValueError("未要求 freshness 时 min_recent_sources 必须为 0。")
+        return self
+
+
+class BenchmarkRubricCriterion(BaseModel):
+    """人工 gold rubric 的一个加权评分维度。"""
+
+    criterion_id: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    weight: float = Field(gt=0.0, le=1.0)
+
+
+class BenchmarkGoldRubric(BaseModel):
+    """Case 级人工复核 rubric，不把工程代理分数当作事实正确率。"""
+
+    required_points: list[str] = Field(min_length=3)
+    critical_errors: list[str] = Field(default_factory=list)
+    criteria: list[BenchmarkRubricCriterion] = Field(min_length=3)
+    pass_score: float = Field(default=0.75, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def weights_sum_to_one(self) -> "BenchmarkGoldRubric":
+        total = sum(item.weight for item in self.criteria)
+        if abs(total - 1.0) > 1e-9:
+            raise ValueError("gold rubric criteria 权重之和必须为 1。")
+        ids = [item.criterion_id for item in self.criteria]
+        if len(ids) != len(set(ids)):
+            raise ValueError("gold rubric criterion_id 必须唯一。")
+        return self
+
+
 class BenchmarkCase(BaseModel):
     """单个研究 Benchmark Case。"""
 
     case_id: str = Field(min_length=1)
     query: str = Field(min_length=1)
     category: str = Field(min_length=1)
+    topic_group: str = Field(default="unclassified", min_length=1)
     difficulty: Literal["easy", "medium", "hard"] = "medium"
     tags: list[str] = Field(default_factory=list)
     expected_keywords: list[str] = Field(default_factory=list)
     expectations: BenchmarkExpectations = Field(default_factory=BenchmarkExpectations)
+    source_policy: BenchmarkSourcePolicy | None = None
+    gold_rubric: BenchmarkGoldRubric | None = None
 
 
 class BenchmarkCorpus(BaseModel):

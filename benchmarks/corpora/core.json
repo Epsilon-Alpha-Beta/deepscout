@@ -1,7 +1,7 @@
 {
   "name": "deepscout-core-research",
-  "version": "1.2.0",
-  "description": "Phase 4 核心研究能力评测集；扩展到 20 个跨编排、可靠性、安全、检索、治理、模型集成与评测主题的独立 Case。当前只定义 Case 与阈值，不代表已经获得真实 Provider Benchmark 分数。",
+  "version": "1.3.0",
+  "description": "Phase 4 核心研究能力评测集；20 个 Case 带来源政策、时效要求与人工 gold rubric。当前定义不代表已经获得真实 Provider Benchmark 分数。",
   "cases": [
     {
       "case_id": "framework-comparison",
@@ -26,6 +26,54 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "architecture-orchestration",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "docs.langchain.com",
+          "microsoft.github.io",
+          "docs.crewai.com"
+        ],
+        "primary_source_types": [
+          "official_docs"
+        ],
+        "freshness_required": true,
+        "max_age_days": 730,
+        "min_recent_sources": 1
+      },
+      "gold_rubric": {
+        "required_points": [
+          "分别说明 LangGraph、AutoGen、CrewAI 的编排与状态模型",
+          "比较 durable execution、可恢复性与生产部署差异",
+          "基于明确约束给出框架选择建议"
+        ],
+        "critical_errors": [
+          "把三个框架描述成具有相同状态/恢复语义"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -51,6 +99,54 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "protocols-tools",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "modelcontextprotocol.io",
+          "github.com"
+        ],
+        "primary_source_types": [
+          "official_docs",
+          "standards"
+        ],
+        "freshness_required": true,
+        "max_age_days": 730,
+        "min_recent_sources": 1
+      },
+      "gold_rubric": {
+        "required_points": [
+          "准确区分 stdio 与 Streamable HTTP 的连接和部署模型",
+          "说明认证、网络暴露和进程边界带来的安全差异",
+          "按本地工具、远程服务等场景给出选择条件"
+        ],
+        "critical_errors": [
+          "把 stdio 描述成远程网络传输协议"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -76,6 +172,53 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "reliability-state",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "docs.langchain.com",
+          "postgresql.org"
+        ],
+        "primary_source_types": [
+          "official_docs"
+        ],
+        "freshness_required": false,
+        "max_age_days": null,
+        "min_recent_sources": 0
+      },
+      "gold_rubric": {
+        "required_points": [
+          "解释 checkpoint 保存的状态与恢复语义",
+          "说明幂等副作用与 retry 的关系",
+          "给出 PostgreSQL 持久化、故障恢复和重放边界"
+        ],
+        "critical_errors": [
+          "声称 checkpoint 自动保证所有外部副作用幂等"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -101,6 +244,55 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "observability-evaluation",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "opentelemetry.io",
+          "prometheus.io",
+          "docs.langchain.com"
+        ],
+        "primary_source_types": [
+          "official_docs",
+          "standards"
+        ],
+        "freshness_required": true,
+        "max_age_days": 730,
+        "min_recent_sources": 1
+      },
+      "gold_rubric": {
+        "required_points": [
+          "区分 traces、metrics、logs 与 agent trajectory 的职责",
+          "比较 OpenTelemetry、Prometheus、LangSmith 的互补关系",
+          "给出生产采集、关联和后端部署方案"
+        ],
+        "critical_errors": [
+          "把 Prometheus 描述成完整分布式 tracing 系统"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -126,6 +318,54 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "distributed-runtime",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "redis.io",
+          "datatracker.ietf.org"
+        ],
+        "primary_source_types": [
+          "official_docs",
+          "standards"
+        ],
+        "freshness_required": false,
+        "max_age_days": null,
+        "min_recent_sources": 0
+      },
+      "gold_rubric": {
+        "required_points": [
+          "比较固定窗口、滑动窗口、令牌桶的误差与突发特性",
+          "解释多副本下共享状态和原子更新要求",
+          "说明 Redis Lua 如何避免计数竞态并讨论热 key 成本"
+        ],
+        "critical_errors": [
+          "声称多条非事务 Redis 命令天然具备跨副本原子性"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -151,6 +391,54 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "architecture-orchestration",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "docs.langchain.com",
+          "github.com"
+        ],
+        "primary_source_types": [
+          "official_docs",
+          "source_repository"
+        ],
+        "freshness_required": true,
+        "max_age_days": 730,
+        "min_recent_sources": 1
+      },
+      "gold_rubric": {
+        "required_points": [
+          "描述 interrupt 后持久化暂停与 resume 的状态流",
+          "区分 approve 与 revise 对后续图路径的影响",
+          "分析 checkpoint、thread identity 与失败恢复边界"
+        ],
+        "critical_errors": [
+          "把进程内暂停等同于可跨进程 durable HITL"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -176,6 +464,54 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "security-governance",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "genai.owasp.org",
+          "nist.gov"
+        ],
+        "primary_source_types": [
+          "standards",
+          "government"
+        ],
+        "freshness_required": true,
+        "max_age_days": 730,
+        "min_recent_sources": 1
+      },
+      "gold_rubric": {
+        "required_points": [
+          "区分直接与间接 prompt injection 的攻击面",
+          "覆盖 tool permission、least privilege、数据外泄与确认机制",
+          "提出分层防护并明确模型自身不能作为唯一安全边界"
+        ],
+        "critical_errors": [
+          "声称仅靠 system prompt 可以可靠消除 prompt injection"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -201,6 +537,56 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "retrieval-evidence",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "arxiv.org",
+          "elastic.co",
+          "qdrant.tech"
+        ],
+        "primary_source_types": [
+          "academic",
+          "official_docs",
+          "vendor_engineering"
+        ],
+        "freshness_required": true,
+        "max_age_days": 730,
+        "min_recent_sources": 1
+      },
+      "gold_rubric": {
+        "required_points": [
+          "比较 sparse、dense 与 hybrid retrieval 的召回/精度权衡",
+          "解释 reranking、query expansion 与 metadata filtering 的作用",
+          "给出离线评测指标和生产检索管线建议"
+        ],
+        "critical_errors": [
+          "把向量相似度直接等同于事实相关性"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -226,6 +612,54 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "reliability-state",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "datatracker.ietf.org",
+          "aws.amazon.com"
+        ],
+        "primary_source_types": [
+          "standards",
+          "vendor_engineering"
+        ],
+        "freshness_required": false,
+        "max_age_days": null,
+        "min_recent_sources": 0
+      },
+      "gold_rubric": {
+        "required_points": [
+          "解释 idempotency key、dedup store 与条件写的职责",
+          "说明 retry、超时和 exactly-once 幻觉之间的关系",
+          "给出支付/发消息等外部副作用的恢复设计"
+        ],
+        "critical_errors": [
+          "声称网络重试可以提供真正的 exactly-once 外部副作用"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -251,6 +685,54 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "reliability-state",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "platform.openai.com",
+          "docs.anthropic.com",
+          "ai.google.dev"
+        ],
+        "primary_source_types": [
+          "official_docs"
+        ],
+        "freshness_required": true,
+        "max_age_days": 730,
+        "min_recent_sources": 1
+      },
+      "gold_rubric": {
+        "required_points": [
+          "区分 provider fallback、model fallback 与 region fallback",
+          "讨论 timeout、retry、circuit breaker 和质量/成本路由",
+          "说明结构化输出或能力差异造成的兼容性边界"
+        ],
+        "critical_errors": [
+          "假设所有 Provider 的模型能力和接口语义完全可替换"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -276,6 +758,54 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "retrieval-evidence",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "nist.gov",
+          "arxiv.org"
+        ],
+        "primary_source_types": [
+          "government",
+          "academic"
+        ],
+        "freshness_required": false,
+        "max_age_days": null,
+        "min_recent_sources": 0
+      },
+      "gold_rubric": {
+        "required_points": [
+          "识别来源冲突而不是静默平均或多数投票",
+          "比较来源权威性、时间、方法与独立性",
+          "要求报告保留不确定性并给出可追溯证据"
+        ],
+        "critical_errors": [
+          "在证据冲突时无说明地选择单一来源作为事实"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -301,6 +831,55 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "observability-evaluation",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "arxiv.org",
+          "platform.openai.com",
+          "docs.anthropic.com"
+        ],
+        "primary_source_types": [
+          "academic",
+          "official_docs"
+        ],
+        "freshness_required": true,
+        "max_age_days": 730,
+        "min_recent_sources": 1
+      },
+      "gold_rubric": {
+        "required_points": [
+          "区分任务成功、事实正确性、过程质量与成本/时延指标",
+          "解释 LLM-as-judge 的偏差与校准需求",
+          "提出可重复、盲评、人工复核和统计显著性方案"
+        ],
+        "critical_errors": [
+          "把单一 LLM judge 分数当作无偏 ground truth"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -326,6 +905,55 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "retrieval-evidence",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "arxiv.org",
+          "docs.anthropic.com",
+          "ai.google.dev"
+        ],
+        "primary_source_types": [
+          "academic",
+          "official_docs"
+        ],
+        "freshness_required": true,
+        "max_age_days": 730,
+        "min_recent_sources": 1
+      },
+      "gold_rubric": {
+        "required_points": [
+          "区分 context window、短期工作记忆和长期外部记忆",
+          "比较摘要、检索和原文保留的失真/成本权衡",
+          "讨论 memory 写入、更新、遗忘与隐私治理"
+        ],
+        "critical_errors": [
+          "把更大 context window 等同于无限且可靠的长期记忆"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -351,6 +979,56 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "security-governance",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "nist.gov",
+          "genai.owasp.org",
+          "kubernetes.io"
+        ],
+        "primary_source_types": [
+          "government",
+          "standards",
+          "official_docs"
+        ],
+        "freshness_required": true,
+        "max_age_days": 730,
+        "min_recent_sources": 1
+      },
+      "gold_rubric": {
+        "required_points": [
+          "说明进程、文件系统、网络与凭据隔离边界",
+          "讨论 syscall/container sandbox 与应用层 allowlist 的互补性",
+          "给出资源限制、审计和高风险动作审批方案"
+        ],
+        "critical_errors": [
+          "把容器默认隔离描述成完整安全沙箱"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -376,6 +1054,54 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "distributed-runtime",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "datatracker.ietf.org",
+          "grpc.io"
+        ],
+        "primary_source_types": [
+          "standards",
+          "official_docs"
+        ],
+        "freshness_required": false,
+        "max_age_days": null,
+        "min_recent_sources": 0
+      },
+      "gold_rubric": {
+        "required_points": [
+          "解释生产者/消费者速率失配和缓冲区增长",
+          "比较 bounded queue、flow control、drop/cancel 策略",
+          "说明 SSE/gRPC 等长连接下断连与超时恢复"
+        ],
+        "critical_errors": [
+          "认为增加无限缓冲可以解决 backpressure"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -401,6 +1127,55 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "security-governance",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "nist.gov",
+          "datatracker.ietf.org",
+          "genai.owasp.org"
+        ],
+        "primary_source_types": [
+          "government",
+          "standards"
+        ],
+        "freshness_required": true,
+        "max_age_days": 730,
+        "min_recent_sources": 1
+      },
+      "gold_rubric": {
+        "required_points": [
+          "区分 authentication、authorization 与 secret distribution",
+          "覆盖短期凭据、rotation、least privilege 和 service identity",
+          "分析 Agent/tool delegation 下的权限收缩与审计"
+        ],
+        "critical_errors": [
+          "把 API key 是否有效等同于调用者拥有所有操作权限"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -426,6 +1201,54 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "security-governance",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "w3.org",
+          "nist.gov"
+        ],
+        "primary_source_types": [
+          "standards",
+          "government"
+        ],
+        "freshness_required": true,
+        "max_age_days": 730,
+        "min_recent_sources": 1
+      },
+      "gold_rubric": {
+        "required_points": [
+          "说明数据 provenance、lineage 与引用可追溯性的区别",
+          "覆盖 PII 最小化、保留期限与访问控制",
+          "讨论派生数据/模型输出如何保留来源和隐私约束"
+        ],
+        "critical_errors": [
+          "声称删除原始数据会自动消除所有派生数据中的隐私风险"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -451,6 +1274,54 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "protocols-tools",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "platform.openai.com",
+          "docs.anthropic.com",
+          "ai.google.dev"
+        ],
+        "primary_source_types": [
+          "official_docs"
+        ],
+        "freshness_required": true,
+        "max_age_days": 730,
+        "min_recent_sources": 1
+      },
+      "gold_rubric": {
+        "required_points": [
+          "区分 JSON mode、schema constrained decoding 与应用层校验",
+          "覆盖 parse failure、schema evolution 和 retry/repair 策略",
+          "比较不同 Provider 的结构化输出能力与兼容边界"
+        ],
+        "critical_errors": [
+          "把返回可解析 JSON 等同于满足业务 schema 和语义约束"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -476,6 +1347,53 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "distributed-runtime",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "kubernetes.io",
+          "rabbitmq.com"
+        ],
+        "primary_source_types": [
+          "official_docs"
+        ],
+        "freshness_required": false,
+        "max_age_days": null,
+        "min_recent_sources": 0
+      },
+      "gold_rubric": {
+        "required_points": [
+          "比较 FIFO、priority、weighted fair 等调度策略",
+          "讨论 starvation、head-of-line blocking 与租户隔离",
+          "给出并发上限、backpressure 和可观测指标"
+        ],
+        "critical_errors": [
+          "声称 priority queue 可以天然避免 starvation"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     },
     {
@@ -501,6 +1419,55 @@
         "max_research_tokens": 100000,
         "max_wall_seconds": 600,
         "min_keyword_recall": 0.67
+      },
+      "topic_group": "reliability-state",
+      "source_policy": {
+        "min_primary_sources": 2,
+        "preferred_domains": [
+          "aws.amazon.com",
+          "cloud.google.com",
+          "learn.microsoft.com"
+        ],
+        "primary_source_types": [
+          "vendor_engineering",
+          "official_docs"
+        ],
+        "freshness_required": true,
+        "max_age_days": 730,
+        "min_recent_sources": 1
+      },
+      "gold_rubric": {
+        "required_points": [
+          "区分 active-active、active-passive 与数据复制模型",
+          "分析 checkpoint/RPO/RTO、跨区一致性和外部副作用恢复",
+          "给出 region failover、流量切换和 split-brain 防护"
+        ],
+        "critical_errors": [
+          "声称跨区域多活可以自动获得强一致且零 RPO/RTO"
+        ],
+        "criteria": [
+          {
+            "criterion_id": "factual_correctness",
+            "description": "核心概念、机制和边界准确，不含会改变结论的事实错误。",
+            "weight": 0.35
+          },
+          {
+            "criterion_id": "required_coverage",
+            "description": "覆盖该 Case 的 required_points，并形成完整论证。",
+            "weight": 0.3
+          },
+          {
+            "criterion_id": "evidence_quality",
+            "description": "关键主张由适当的主来源或高质量来源支撑，引用可追溯。",
+            "weight": 0.2
+          },
+          {
+            "criterion_id": "tradeoff_reasoning",
+            "description": "明确讨论适用条件、失败模式、权衡与生产建议。",
+            "weight": 0.15
+          }
+        ],
+        "pass_score": 0.75
       }
     }
   ]

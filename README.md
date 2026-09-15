@@ -13,7 +13,7 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.4.4 / Phase 4 第五批 Corpus 扩容与实验检验能力规划**：保留 Benchmark/Ablation/Repeated/Significance 基座，
+> 当前版本为 **v0.4.5 / Phase 4 第六批 Benchmark Case 质量控制层**：保留 Benchmark/Ablation/Repeated/Significance 基座，
 > Core Corpus 扩展到 20 个跨 16 类主题的 Case，并新增 exact sign-flip 分辨率、paired-normal power、required N 与 MDE 规划。
 > 真实 LLM Provider + Tavily 仍缺少凭据，因此当前 power 结果属于实验设计规划，不代表真实模型质量或真实效应量。
 
@@ -218,7 +218,7 @@ API request middleware 新增 OpenTelemetry SERVER span，携带 request ID、ro
 
 ## Phase 4 第一批：Benchmark 与轨迹级评测
 
-新增 `benchmarks/corpora/core.json`，当前 v1.2.0 Corpus 包含 20 个核心研究 Case / 16 个 category；`scripts/run_benchmark.py --validate-only` 可在不调用任何外部 Provider 的情况下校验 Corpus。真实运行时，runner 使用 LangGraph `updates + values` stream，同时记录节点轨迹并计算 citation coverage、task success、source diversity、search calls、research tokens、worker/wall time 等指标。
+新增 `benchmarks/corpora/core.json`，当前 v1.3.0 Corpus 包含 20 个核心研究 Case / 16 个 category，并为每个 Case 定义来源政策、时效要求与人工 gold rubric；`scripts/run_benchmark.py --validate-only` 可在不调用任何外部 Provider 的情况下校验 Corpus。真实运行时，runner 使用 LangGraph `updates + values` stream，同时记录节点轨迹并计算 citation coverage、task success、source diversity、search calls、research tokens、worker/wall time 等指标。
 
 Trajectory 只记录节点名、相对耗时和输出字段名，不保存模型正文或 Evidence 正文。`quality_proxy_score` 是透明的工程代理指标，仅用于版本/消融相对比较，不等同于人工事实正确率。成本估算只有显式传入 Research Worker token 与搜索单价时才产生，否则美元成本保持 `null`；当前 tracked cost 不覆盖 Analyzer/Planner/Writer 等尚未记录 token 的节点，因此不能当作完整账单成本。
 
@@ -254,19 +254,27 @@ Ablation 报告输出 quality/citation/source-diversity 与 replan/evidence/sear
 
 ## Phase 4 第五批：Corpus 扩容与 Power / MDE 规划
 
-Core Corpus 从 6 个扩展到 20 个 Case，覆盖 16 个 category；新增安全、检索、幂等副作用、Provider 路由、冲突证据、评测方法、长上下文记忆、sandbox、streaming backpressure、服务身份/Secrets、数据治理、结构化输出、队列公平和多地域恢复等主题。Corpus 版本升级为 `1.2.0`。
+Core Corpus 从 6 个扩展到 20 个 Case，覆盖 16 个 category；新增安全、检索、幂等副作用、Provider 路由、冲突证据、评测方法、长上下文记忆、sandbox、streaming backpressure、服务身份/Secrets、数据治理、结构化输出、队列公平和多地域恢复等主题。Corpus 在第五批扩到 `1.2.0`，第六批质量控制元数据升级为 `1.3.0`。
 
 新增 `scripts/plan_experiment.py`，在不调用任何 Provider 的情况下读取 Corpus Case 数和 Ablation family size，输出 exact sign-flip/Holm 可达性，以及基于 paired-normal + Bonferroni `alpha / family_size` 的保守 power 规划。默认 `alpha=0.05`、family size=5、target power=0.8 时，20 cases 的 MDE 约为 `Cohen dz=0.764`；假设真实效应 `dz=0.8`，近似 power 约 `84.2%`，而 `dz=0.5` 只有约 `36.7%`，达到 80% power 约需 47 个独立 Case。
 
 规划结果输出 `plan.json / plan.md / sample_sizes.csv / power_curve.csv / charts/power_curve.svg`。这是一层**实验设计近似**：Holm 没有使用简单闭式 power，而是用 Bonferroni 阈值做保守规划；最终显著性仍以真实 repeated 数据上的 permutation/Wilcoxon/Holm 分析为准。只校验规划可运行 `uv run python scripts/plan_experiment.py --validate-only`。
 
+## Phase 4 第六批：Benchmark Case 质量控制层
+
+Core Corpus v1.3.0 为 20/20 Case 新增 `topic_group`、`source_policy` 与 `gold_rubric`。来源政策包含最少 primary source 数、preferred domains、primary-source 类型以及可选 freshness 窗口；preferred domains 是来源优先级而不是硬 allowlist，避免研究被过度锁死。14/20 Case 要求至少一个近 730 天来源。
+
+人工 gold rubric 为每个 Case 定义至少 3 个 case-specific required points、critical error guard，以及 factual correctness / required coverage / evidence quality / trade-off reasoning 四个加权维度；权重必须精确归一为 1，默认 pass score 为 0.75。工程 `quality_proxy_score` 仍不替代人工 gold 评分。
+
+新增 `scripts/audit_benchmark.py --validate-only --strict`，静态审计 source/rubric 覆盖、域名合法性、freshness、topic/category/difficulty balance、单一来源域集中度和 Case 标签/关键词重叠。当前 20 Case 被归入 7 个 topic group，最大 topic share=20%，difficulty=70% hard/30% medium，freshness coverage=70%，严格审计为 0 error / 0 warning。完整报告输出 `quality.json / quality.md / cases.csv / charts/topic_balance.svg / charts/difficulty_balance.svg`。
+
 ## 当前验证状态
 
-Phase 4 第五批当前代码已在项目隔离环境中完成验证：
+Phase 4 第六批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：85/85 通过（包含真实 Redis、Benchmark、Ablation、重复统计、显著性检验与 power planning 测试）；
+- `pytest`：89/89 通过（包含真实 Redis、Benchmark、Ablation、重复统计、显著性检验、power planning 与 Benchmark quality-control 测试）；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -282,4 +290,4 @@ Phase 4 第五批当前代码已在项目隔离环境中完成验证：
 
 **Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
-**Phase 4 后续**：真实 Provider 凭据可用后先用 20-case Corpus 做低重复 smoke，再按预算执行完整 repeated/ablation；根据真实 paired variance 重新估计 power/MDE，并视中等效应检测目标继续扩充 Case，同时补充真实成本、人工/外部事实正确率评审。
+**Phase 4 后续**：真实 Provider 凭据可用后先用 20-case Corpus 做低重复 smoke；真实运行后按 gold rubric 做盲评/双人复核，并将 source-policy compliance、人工事实正确率与现有统计链合并，再根据真实 paired variance 重新估计 power/MDE。

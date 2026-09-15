@@ -22,10 +22,13 @@ from deepscout.evaluation.models import (
     BenchmarkCase,
     BenchmarkCorpus,
     BenchmarkExpectations,
+    BenchmarkGoldRubric,
     BenchmarkMetrics,
     BenchmarkPricing,
     BenchmarkReport,
+    BenchmarkRubricCriterion,
     BenchmarkRunResult,
+    BenchmarkSourcePolicy,
     BenchmarkSummary,
     ExpectationCheck,
     TrajectoryEvent,
@@ -43,6 +46,17 @@ from deepscout.evaluation.power import (
     required_units_for_power,
 )
 from deepscout.evaluation.power_report import render_power_markdown, save_power_plan
+from deepscout.evaluation.quality import (
+    BenchmarkQualityIssue,
+    BenchmarkQualityPolicy,
+    BenchmarkQualityReport,
+    BenchmarkQualitySnapshot,
+    audit_benchmark_corpus,
+)
+from deepscout.evaluation.quality_report import (
+    render_quality_markdown,
+    save_quality_report,
+)
 from deepscout.evaluation.repeated import (
     RepeatedExperimentReport,
     RepeatedRunRecord,
@@ -93,6 +107,13 @@ __all__ = [
     "BenchmarkMetrics",
     "BenchmarkPricing",
     "BenchmarkReport",
+    "BenchmarkQualitySnapshot",
+    "BenchmarkQualityReport",
+    "BenchmarkQualityPolicy",
+    "BenchmarkQualityIssue",
+    "BenchmarkSourcePolicy",
+    "BenchmarkRubricCriterion",
+    "BenchmarkGoldRubric",
     "BenchmarkRunResult",
     "BenchmarkSummary",
     "ExpectationCheck",
@@ -125,6 +146,9 @@ __all__ = [
     "save_significance_report",
     "wilcoxon_signed_rank_exact",
     "TrajectoryRecorder",
+    "audit_benchmark_corpus",
+    "render_quality_markdown",
+    "save_quality_report",
     "build_ablation_report",
     "bootstrap_mean_ci",
     "build_report",

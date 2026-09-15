@@ -1,10 +1,10 @@
 # Phase 4：Benchmark 与轨迹级评测
 
-Phase 4 分五批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus，并加入样本量、power 与 detectable-effect 规划。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实显著性结论。
+Phase 4 分六批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus，并加入样本量、power 与 detectable-effect 规划；第六批建立 Case 来源政策、人工 gold rubric 与 balance 审计。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实显著性结论。
 
 ## Benchmark Corpus
 
-`benchmarks/corpora/core.json` 当前为 v1.2.0，包含 20 个核心研究 Case、16 个 category，覆盖：
+`benchmarks/corpora/core.json` 当前为 v1.3.0，包含 20 个核心研究 Case、16 个 category，覆盖：
 
 - 多智能体框架比较；
 - MCP 传输模式；
@@ -168,9 +168,27 @@ uv run python scripts/plan_experiment.py \
 
 输出包括 `plan.json`、`plan.md`、`sample_sizes.csv`、`power_curve.csv` 与 `charts/power_curve.svg`。若已有 pilot paired-delta 标准差，还可通过 `--paired-std` 将 standardized MDE 转换为绝对指标单位的 MDE。
 
+## 第六批：Benchmark Case 质量控制层
+
+`core.json` 的 20 个 Case 均新增 `topic_group`、`source_policy` 和 `gold_rubric`。`source_policy` 明确最少 primary source 数、preferred domains、primary source 类型，以及需要时的 freshness 窗口；preferred domains 是优先来源，不是全局硬 allowlist。当前 14/20 Case 要求至少一个 730 天内的近期来源。
+
+`gold_rubric` 为每个 Case 定义至少 3 个 case-specific required points、critical errors，以及四个统一加权维度：factual correctness 0.35、required coverage 0.30、evidence quality 0.20、trade-off reasoning 0.15；权重必须总和为 1，默认 pass score=0.75。真实 Provider 结果仍需人工按 rubric 评分，不能用 `quality_proxy_score` 替代人工事实正确率。
+
+新增 `scripts/audit_benchmark.py`，审计 source/rubric 覆盖、域名语法、freshness、topic/category/difficulty balance、preferred-domain 集中度与 Case 语义重叠。默认 strict policy 要求至少 20 Case、至少 6 个 topic group、单 topic/category 不超过 25%、medium 至少 20%、hard 不超过 80%、freshness coverage 至少 50%、单一 preferred domain 覆盖不超过 40%。当前分布为 7 个 topic group、最大 topic share=20%、hard/medium=70%/30%、freshness=70%，严格审计为 0 error / 0 warning。
+
+只做质量审计，不调用 Provider：
+
+```bash
+uv run python scripts/audit_benchmark.py --validate-only --strict
+uv run python scripts/audit_benchmark.py --strict \
+  --output-dir benchmark-results/quality-audit-latest
+```
+
+输出包括 `quality.json`、`quality.md`、`cases.csv`、`charts/topic_balance.svg` 和 `charts/difficulty_balance.svg`。
+
 ## 当前验证边界
 
-第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
+第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告；第六批验证 source/rubric 完整性、域名/freshness 策略与 Corpus balance guard。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
 
 真实 Provider + Tavily 仍因服务器缺少凭据而阻塞，因此 `core.json` 当前只有 Case/阈值定义，没有提交伪造的真实结果文件。
 

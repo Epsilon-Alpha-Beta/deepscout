@@ -99,6 +99,6 @@ def test_corpus_rejects_duplicate_case_ids():
 def test_core_benchmark_corpus_is_valid():
     corpus = load_corpus(Path("benchmarks/corpora/core.json"))
     assert corpus.name == "deepscout-core-research"
-    assert corpus.version == "1.2.0"
+    assert corpus.version == "1.3.0"
     assert len(corpus.cases) == 20
     assert len({case.category for case in corpus.cases}) >= 12

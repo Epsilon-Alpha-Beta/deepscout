@@ -1,9 +1,17 @@
 {
   "project": "DeepScout",
-  "version": "0.4.4",
-  "phase": "Phase 4 - batch 5",
+  "version": "0.4.5",
+  "phase": "Phase 4 - batch 6",
   "validation": {
-    "benchmark_corpus": "passed_20_cases_16_categories_v1.2.0",
+    "benchmark_corpus": "passed_20_cases_16_categories_v1.3.0",
+    "benchmark_topic_groups": "passed_7_groups_max_share_0.20",
+    "benchmark_difficulty_balance": "passed_hard0.70_medium0.30",
+    "source_policy_coverage": "passed_20_of_20",
+    "gold_rubric_coverage": "passed_20_of_20_weights_sum_1",
+    "freshness_policy_coverage": "passed_14_of_20_0.70",
+    "benchmark_quality_strict_audit": "passed_0_errors_0_warnings",
+    "preferred_domain_concentration": "passed_max_nist_gov_0.25_below_0.40",
+    "quality_reports": "passed_json_markdown_csv_svg",
     "ablation_matrix": "passed_6_profiles_120_planned_runs",
     "repeated_experiment_protocol": "passed_600_planned_default_runs",
     "exact_sign_flip_resolution": "passed_raw_floor_1.90735e-6_holm5_floor_9.53674e-6",
@@ -13,13 +21,12 @@
     "large_effect_power": "dz0.8_power0.8418_required19",
     "medium_effect_power": "dz0.5_power0.3670_required47",
     "small_effect_power": "dz0.2_power0.0466_required292",
-    "power_reports": "passed_json_markdown_csv_svg",
-    "core_power_guard": "passed_dz0.8_power_ge_0.8",
-    "pytest_with_redis": "85 passed",
+    "pytest_with_redis": "89 passed",
     "ruff": "passed",
-    "project_version": "0.4.4",
-    "container_power_validate": "passed_v0.4.4_nonroot_planner_healthcheck",
+    "project_version": "0.4.5",
+    "container_quality_validate": "passed_v0.4.5_nonroot_strict_audit_healthcheck",
     "live_provider_benchmark": "blocked_missing_credentials",
-    "real_power_calibration": "not_run_without_real_paired_variance"
+    "real_gold_rubric_scores": "not_run",
+    "real_source_policy_compliance": "not_run_without_live_evidence_metadata"
   }
 }
