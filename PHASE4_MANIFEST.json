@@ -1,0 +1,21 @@
+{
+  "project": "DeepScout",
+  "version": "0.4.0",
+  "phase": "Phase 4 - batch 1",
+  "validation": {
+    "benchmark_corpus": "passed_6_cases_schema_valid",
+    "trajectory_recorder": "passed_nodes_timing_output_keys_only",
+    "metrics_pipeline": "passed_synthetic_fixture",
+    "expectation_checks": "passed_synthetic_fixture",
+    "json_markdown_report": "passed_synthetic_fixture",
+    "cost_estimation_without_pricing": "passed_null_not_fabricated",
+    "benchmark_cli_validate_only": "passed",
+    "live_provider_benchmark": "blocked_missing_credentials",
+    "real_benchmark_scores": "not_run",
+    "pytest_with_redis": "58 passed",
+    "ruff": "passed",
+    "project_version": "0.4.0",
+    "container_benchmark_validate": "passed_v0.4.0_nonroot",
+    "core_corpus_ci_test": "passed"
+  }
+}

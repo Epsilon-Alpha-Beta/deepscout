@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir --require-hashes \
 COPY pyproject.toml README.md ./
 COPY src ./src
 COPY scripts ./scripts
+COPY benchmarks ./benchmarks
 
 RUN chown -R deepscout:deepscout /app
 

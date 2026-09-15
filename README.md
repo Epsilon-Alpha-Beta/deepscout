@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.3.4 / Phase 3 第四批生产增强**：在耐久执行与服务化基础上，
-> 新增真实 MCP 双传输联调、API 认证与限流、Prometheus/结构化日志，以及非 root 容器部署。
-> 真实 LLM Provider + Tavily 端到端研究 harness 已就绪，但当前服务器缺少所需凭据，因此仍未标记为通过。
+> 当前版本为 **v0.4.0 / Phase 4 第一批评测基座**：Phase 3 的 MCP、耐久执行、HITL、服务化与生产硬化能力保持不变，
+> 新增版本化 Benchmark Corpus、低敏感 trajectory recorder、质量/引用/资源/延迟指标、可选成本估算，以及 JSON/Markdown 报告。
+> 当前仅使用 synthetic fixture 验证评测管线；真实 LLM Provider + Tavily 仍因服务器缺少凭据而未产生真实 Benchmark 成绩。
 
 ## 系统架构
 
@@ -216,13 +216,21 @@ uv run python scripts/run_api.py
 
 API request middleware 新增 OpenTelemetry SERVER span，携带 request ID、route 与 status；OTLP/HTTP exporter 使用标准 `OTEL_EXPORTER_OTLP_*` 环境变量配置。测试使用官方 InMemorySpanExporter 验证 span 实际生成。
 
+## Phase 4 第一批：Benchmark 与轨迹级评测
+
+新增 `benchmarks/corpora/core.json`，当前包含 6 个核心研究 Case；`scripts/run_benchmark.py --validate-only` 可在不调用任何外部 Provider 的情况下校验 Corpus。真实运行时，runner 使用 LangGraph `updates + values` stream，同时记录节点轨迹并计算 citation coverage、task success、source diversity、search calls、research tokens、worker/wall time 等指标。
+
+Trajectory 只记录节点名、相对耗时和输出字段名，不保存模型正文或 Evidence 正文。`quality_proxy_score` 是透明的工程代理指标，仅用于版本/消融相对比较，不等同于人工事实正确率。成本估算只有显式传入 Research Worker token 与搜索单价时才产生，否则美元成本保持 `null`；当前 tracked cost 不覆盖 Analyzer/Planner/Writer 等尚未记录 token 的节点，因此不能当作完整账单成本。
+
+Benchmark 输出为 `report.json` 与 `report.md`；当前 synthetic fixture 只证明指标、阈值、异常归档和报告管线正确，不代表真实 Provider Benchmark 分数。详见 `docs/phase4.md`。
+
 ## 当前验证状态
 
-Phase 3 第四批当前代码已在项目隔离环境中完成验证：
+Phase 4 第一批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：52/52 通过（包含真实 Redis 集成测试与 Docker requirements 锁同步校验）；
+- `pytest`：58/58 通过（包含真实 Redis 集成测试与 Phase 4 评测管线测试）；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -238,4 +246,4 @@ Phase 3 第四批当前代码已在项目隔离环境中完成验证：
 
 **Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
-**Phase 4**：Benchmark 数据集、轨迹级评测、消融实验、成本/延迟/质量指标与可视化。
+**Phase 4 后续**：在同一 Corpus 上加入消融矩阵、重复实验/方差统计、真实 Provider 成本与延迟对比，以及结果可视化。

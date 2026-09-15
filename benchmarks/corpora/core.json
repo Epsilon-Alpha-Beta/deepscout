@@ -1,0 +1,157 @@
+{
+  "name": "deepscout-core-research",
+  "version": "1.0.0",
+  "description": "Phase 4 核心研究能力评测集；当前只定义 Case 与阈值，不代表已经获得真实 Provider Benchmark 分数。",
+  "cases": [
+    {
+      "case_id": "framework-comparison",
+      "query": "比较 LangGraph、AutoGen 和 CrewAI 在生产级多智能体研究系统中的架构、状态管理、可恢复性与工程权衡。",
+      "category": "comparison",
+      "difficulty": "hard",
+      "tags": [
+        "multi-agent",
+        "framework"
+      ],
+      "expected_keywords": [
+        "LangGraph",
+        "AutoGen",
+        "CrewAI"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "mcp-transports",
+      "query": "研究 Model Context Protocol 的 stdio 与 Streamable HTTP 传输模式，比较安全边界、部署形态和适用场景。",
+      "category": "protocol",
+      "difficulty": "medium",
+      "tags": [
+        "mcp",
+        "tools"
+      ],
+      "expected_keywords": [
+        "MCP",
+        "stdio",
+        "HTTP"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "durable-agent-state",
+      "query": "分析 PostgreSQL checkpoint、幂等执行和 retry 对长运行 Agent durable execution 的作用，并给出生产设计建议。",
+      "category": "reliability",
+      "difficulty": "hard",
+      "tags": [
+        "checkpoint",
+        "postgresql"
+      ],
+      "expected_keywords": [
+        "PostgreSQL",
+        "checkpoint",
+        "retry"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "agent-observability",
+      "query": "比较 OpenTelemetry、Prometheus 与 LangSmith 在 Agent 系统可观测性中的职责、互补关系和部署方式。",
+      "category": "observability",
+      "difficulty": "medium",
+      "tags": [
+        "otel",
+        "metrics"
+      ],
+      "expected_keywords": [
+        "OpenTelemetry",
+        "Prometheus",
+        "LangSmith"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "distributed-rate-limit",
+      "query": "比较固定窗口、滑动窗口、令牌桶在多副本 API 限流中的正确性与性能，并说明 Redis Lua 的原子性价值。",
+      "category": "distributed-systems",
+      "difficulty": "medium",
+      "tags": [
+        "redis",
+        "rate-limit"
+      ],
+      "expected_keywords": [
+        "Redis",
+        "Lua",
+        "滑动窗口"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "hitl-research-agent",
+      "query": "设计一个支持 interrupt、人工 approve/revise、checkpoint 恢复的 Human-in-the-loop 深度研究 Agent 工作流，并分析失败恢复边界。",
+      "category": "agent-design",
+      "difficulty": "hard",
+      "tags": [
+        "hitl",
+        "langgraph"
+      ],
+      "expected_keywords": [
+        "interrupt",
+        "checkpoint",
+        "approve"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    }
+  ]
+}
