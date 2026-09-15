@@ -1,17 +1,20 @@
 # Phase 4：Benchmark 与轨迹级评测
 
-Phase 4 分四批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实显著性结论。
+Phase 4 分五批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus，并加入样本量、power 与 detectable-effect 规划。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实显著性结论。
 
 ## Benchmark Corpus
 
-`benchmarks/corpora/core.json` 当前包含 6 个核心研究 Case，覆盖：
+`benchmarks/corpora/core.json` 当前为 v1.2.0，包含 20 个核心研究 Case、16 个 category，覆盖：
 
 - 多智能体框架比较；
 - MCP 传输模式；
 - durable execution；
 - Agent 可观测性；
 - Redis 分布式限流；
-- Human-in-the-loop 工作流。
+- Human-in-the-loop 工作流；
+- Prompt injection / tool safety、hybrid retrieval、幂等副作用与 Provider 路由；
+- 冲突证据处理、Agent 评测、长上下文记忆与 sandbox；
+- streaming backpressure、服务身份/Secrets、数据治理、结构化输出、队列公平与多地域恢复。
 
 每个 Case 包含 category、difficulty、tags、expected keywords 和机器可校验 expectations。`case_id` 在同一 Corpus 内必须唯一。
 
@@ -84,7 +87,7 @@ Ablation runner 按 profile **顺序执行**，每个 profile 内仍允许 Resea
 uv run python scripts/run_ablation.py --validate-only
 ```
 
-真实运行（完整矩阵是 6 profiles × 6 cases = 36 次研究任务）：
+真实运行（完整矩阵是 6 profiles × 20 cases = 120 次研究任务）：
 
 ```bash
 uv run python scripts/run_ablation.py \
@@ -125,7 +128,7 @@ benchmark-results/repeated-ablation-latest/
 
 `statistics.csv` 与 `deltas.csv` 都显式包含 `count / mean / std / median / p50 / p95 / ci_low / ci_high / confidence_level`。Markdown 中也展示 profile 级完整分布，不要求读者必须打开 CSV。SVG 由标准库直接生成，不增加 matplotlib 等运行时依赖。
 
-默认完整实验是 `6 profiles × 6 cases × 5 repetitions = 180 runs`，成本可能很高。默认 5 次更适合工程 smoke；真实 LLM 的方差、p95 与 CI 若要用于正式结论，应提高 repetition 数并结合预算评估。profile 级 pooled statistics 是跨 case 的描述性汇总，严格比较时应优先检查 `profile_case_statistics` 与同一 `(repetition, case)` 的配对 delta。正式跑真实 Provider 前建议先执行：
+默认完整实验是 `6 profiles × 20 cases × 5 repetitions = 600 runs`，成本可能很高。默认 5 次更适合工程 smoke；真实 LLM 的方差、p95 与 CI 若要用于正式结论，应提高 repetition 数并结合预算评估。profile 级 pooled statistics 是跨 case 的描述性汇总，严格比较时应优先检查 `profile_case_statistics` 与同一 `(repetition, case)` 的配对 delta。正式跑真实 Provider 前建议先执行：
 
 ```bash
 uv run python scripts/run_repeated_ablation.py --validate-only --repetitions 5
@@ -138,20 +141,39 @@ uv run python scripts/run_repeated_ablation.py --limit 1 --repetitions 2
 
 效应量同时报告 Cohen’s dz 与 matched rank-biserial correlation。Cliff’s delta 也输出，但明确标记为 supplementary unpaired effect size，因为它不利用当前实验的配对结构。
 
-全局比较采用 `profile_across_cases`：先在每个 case 内对相同 repetition 的 profile/baseline 做配对，再将每个 case 的平均 paired delta 作为统计单元。固定 Case 的 repetition-level 结果使用 `profile_case`。这样不会把 `6 cases × N repetitions` 直接当成彼此独立的 6N 个样本。
+全局比较采用 `profile_across_cases`：先在每个 case 内对相同 repetition 的 profile/baseline 做配对，再将每个 case 的平均 paired delta 作为统计单元。固定 Case 的 repetition-level 结果使用 `profile_case`。这样不会把 `20 cases × N repetitions` 直接当成彼此独立的 20N 个样本。
 
 主 permutation p-value 在每个 `(scope, case, metric)` family 内对 5 个非 baseline profile 同时计算 Holm–Bonferroni 与 Benjamini–Hochberg 校正。校正不会因某个 profile 全部失败而缩小 family：无有效 pair 的计划比较保留为 `p=1`。当前校正不跨 metric；确认性分析应预先指定主 metric，或增加跨 metric 的二级校正。
 
-当前 6-case Core Corpus 还有一个必须明确的统计边界：6 个 non-zero case units 的 two-sided exact sign-flip raw 最小 p 为 `2/2^6 = 0.03125`，但 5-profile Holm family 的理论最小 adjusted p 约为 `0.15625`。因此现有 Core Corpus 无法在 `alpha=0.05` 下产生 Holm-confirmatory 的全局结论。family size=5 时至少需要 8 个 non-zero paired units 才具有理论可达性。默认每 Case 仅 5 repetitions 时，Case 内 raw 最小 p 更是 `0.0625`。
+第四批曾发现 6-case Core Corpus 的 two-sided exact sign-flip raw 最小 p 为 `0.03125`，5-profile Holm family 的理论最小 adjusted p 约为 `0.15625`，因此确认性结论在数学上不可达。第五批据此将 Corpus 扩到 20 cases；当前 raw exact p floor 约为 `1.91e-6`，最保守 5-way Holm floor 约为 `9.54e-6`，分辨率已不再是主要瓶颈。固定 Case 若仍只跑 5 repetitions，Case 内 raw 最小 p 仍为 `0.0625`，所以 repetition-level 显著性依然需要更多重复。
 
 输出新增 `significance.json`、`significance.csv`、`significance.md`、`charts/significance_effect_sizes.svg` 与 `charts/significance_holm_p.svg`。报告同时写入 theoretical exact p floor、有限 Monte Carlo resamples 的 reportable p floor 与 Holm floor，避免将“检验分辨率不足”误读成“没有效应”。
 
+## 第五批：Corpus 扩容与 Power / Detectable-effect 规划
+
+第四批的分辨率审计说明“p-value 是否可达”和“检验是否有足够 power”是两件事。第五批首先将 Core Corpus 扩展为 20 个 Case / 16 个 category，使全局 exact sign-flip + 5-way Holm 在 `alpha=0.05` 下具备充分离散分辨率；随后新增 `scripts/plan_experiment.py` 做零 Provider 成本的实验设计规划。
+
+Planner 同时给出：当前 N 的 exact raw p floor、worst-case Holm p floor、Holm 可达所需最小独立单元数；以及基于 paired-normal 假设的近似 power、达到目标 power 所需 N、当前 N 的 minimum detectable Cohen’s dz。Holm power 本身没有使用简单闭式近似，规划层采用 Bonferroni `alpha / family_size` 作为保守阈值；最终推断仍使用第四批实现的 permutation/Wilcoxon/Holm。
+
+默认 `alpha=0.05`、family size=5、target power=0.8 时，当前 20-case Corpus 的 MDE 约为 `dz=0.764`。若真实 paired effect 为 `dz=0.8`，保守近似 power 约 `84.2%`，达到 80% power 约需 19 个 Case；若 `dz=0.5`，当前 power 仅约 `36.7%`，约需 47 个 Case；若 `dz=0.2`，约需 292 个 Case。因此 20-case Corpus 足以规划“大效应”确认性实验，但不能据此声称对中小效应也有充分检验能力。
+
+只做规划、不调用 Provider：
+
+```bash
+uv run python scripts/plan_experiment.py --validate-only
+uv run python scripts/plan_experiment.py \
+  --effect-sizes 0.2,0.5,0.8 \
+  --output-dir benchmark-results/power-plan-latest
+```
+
+输出包括 `plan.json`、`plan.md`、`sample_sizes.csv`、`power_curve.csv` 与 `charts/power_curve.svg`。若已有 pilot paired-delta 标准差，还可通过 `--paired-std` 将 standardized MDE 转换为绝对指标单位的 MDE。
+
 ## 当前验证边界
 
-第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH、p-value 分辨率以及 significance CSV/Markdown/SVG 输出。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
+第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
 
 真实 Provider + Tavily 仍因服务器缺少凭据而阻塞，因此 `core.json` 当前只有 Case/阈值定义，没有提交伪造的真实结果文件。
 
 ## 后续批次
 
-真实 Provider 凭据可用后，优先用同一套 repeated runner 生成真实重复实验数据，再补充跨 run 显著性检验、真实 Provider 完整成本、人工或外部事实正确率评审与更完整可视化。对于 citation 消融继续保持“保留 verifier 测量、只关闭 feedback”的实验设计，避免测量口径随处理组变化。
+真实 Provider 凭据可用后，先用 `--limit 1`/低 repetitions 做链路 smoke，再按预算运行 20-case repeated/ablation；用真实 paired variance 回填 `--paired-std` 并重新估计 MDE/required N。若目标转向 `dz≈0.5` 的中等效应确认性结论，应优先继续扩充独立 Case，而不是只增加同一 Case 的 repetitions。对于 citation 消融继续保持“保留 verifier 测量、只关闭 feedback”的实验设计，避免测量口径随处理组变化。

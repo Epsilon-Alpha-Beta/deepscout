@@ -30,6 +30,19 @@ from deepscout.evaluation.models import (
     ExpectationCheck,
     TrajectoryEvent,
 )
+from deepscout.evaluation.power import (
+    ExactResolutionPlan,
+    ExperimentPowerPlan,
+    PowerCurvePoint,
+    PowerScenario,
+    approximate_paired_power,
+    build_power_plan,
+    exact_resolution_plan,
+    minimum_detectable_dz,
+    minimum_units_for_exact_holm,
+    required_units_for_power,
+)
+from deepscout.evaluation.power_report import render_power_markdown, save_power_plan
 from deepscout.evaluation.repeated import (
     RepeatedExperimentReport,
     RepeatedRunRecord,
@@ -83,6 +96,18 @@ __all__ = [
     "BenchmarkRunResult",
     "BenchmarkSummary",
     "ExpectationCheck",
+    "ExactResolutionPlan",
+    "ExperimentPowerPlan",
+    "PowerCurvePoint",
+    "PowerScenario",
+    "approximate_paired_power",
+    "build_power_plan",
+    "exact_resolution_plan",
+    "minimum_detectable_dz",
+    "minimum_units_for_exact_holm",
+    "required_units_for_power",
+    "render_power_markdown",
+    "save_power_plan",
     "DistributionStatistics",
     "RepeatedExperimentReport",
     "RepeatedRunRecord",

@@ -1,7 +1,7 @@
 {
   "name": "deepscout-core-research",
-  "version": "1.0.0",
-  "description": "Phase 4 核心研究能力评测集；当前只定义 Case 与阈值，不代表已经获得真实 Provider Benchmark 分数。",
+  "version": "1.2.0",
+  "description": "Phase 4 核心研究能力评测集；扩展到 20 个跨编排、可靠性、安全、检索、治理、模型集成与评测主题的独立 Case。当前只定义 Case 与阈值，不代表已经获得真实 Provider Benchmark 分数。",
   "cases": [
     {
       "case_id": "framework-comparison",
@@ -141,6 +141,356 @@
         "interrupt",
         "checkpoint",
         "approve"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "prompt-injection-tool-safety",
+      "query": "分析工具调用型 Agent 面临的 prompt injection 与恶意工具输出风险，并比较输入隔离、最小权限、工具 allowlist 和人工审批等防护边界。",
+      "category": "security",
+      "difficulty": "hard",
+      "tags": [
+        "prompt-injection",
+        "tool-safety"
+      ],
+      "expected_keywords": [
+        "prompt injection",
+        "最小权限",
+        "allowlist"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "hybrid-rag-retrieval",
+      "query": "比较 BM25、稠密向量检索、hybrid retrieval 与 reranking 在知识密集型研究 Agent 中的召回、精度、延迟和工程权衡。",
+      "category": "retrieval",
+      "difficulty": "medium",
+      "tags": [
+        "rag",
+        "retrieval"
+      ],
+      "expected_keywords": [
+        "BM25",
+        "向量",
+        "reranking"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "idempotent-agent-actions",
+      "query": "设计会执行外部副作用的 Agent 工具调用可靠性方案，分析 idempotency key、transactional outbox、retry 与重复执行防护。",
+      "category": "reliability",
+      "difficulty": "hard",
+      "tags": [
+        "idempotency",
+        "side-effects"
+      ],
+      "expected_keywords": [
+        "idempotency",
+        "outbox",
+        "retry"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "provider-routing-resilience",
+      "query": "分析多模型 Provider 路由、fallback、timeout、circuit breaker 与重试策略，给出兼顾可用性、成本和尾延迟的生产设计。",
+      "category": "resilience",
+      "difficulty": "hard",
+      "tags": [
+        "routing",
+        "fallback"
+      ],
+      "expected_keywords": [
+        "routing",
+        "fallback",
+        "circuit breaker"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "conflicting-evidence-resolution",
+      "query": "研究深度研究 Agent 遇到互相冲突的技术资料时应如何按一手来源、版本、发布日期和证据强度解决冲突，并保留不确定性。",
+      "category": "evidence-quality",
+      "difficulty": "hard",
+      "tags": [
+        "evidence",
+        "conflict"
+      ],
+      "expected_keywords": [
+        "一手来源",
+        "冲突",
+        "版本"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "agent-evaluation-methodology",
+      "query": "设计生产级研究 Agent 的评测方法，比较离线 benchmark、人工评审、LLM-as-judge 与在线指标的优缺点、偏差和组合方式。",
+      "category": "evaluation",
+      "difficulty": "hard",
+      "tags": [
+        "evaluation",
+        "llm-as-judge"
+      ],
+      "expected_keywords": [
+        "benchmark",
+        "人工",
+        "LLM-as-judge"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "long-context-memory-strategy",
+      "query": "比较长上下文窗口、滚动摘要、外部向量记忆和结构化状态在长运行 Agent 中的准确性、成本、遗忘风险与工程边界。",
+      "category": "memory",
+      "difficulty": "hard",
+      "tags": [
+        "context",
+        "memory"
+      ],
+      "expected_keywords": [
+        "上下文",
+        "摘要",
+        "记忆"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "sandboxed-tool-execution",
+      "query": "设计可执行代码或系统工具的 Agent sandbox，分析容器隔离、文件系统/网络权限、资源配额和逃逸风险控制。",
+      "category": "security",
+      "difficulty": "hard",
+      "tags": [
+        "sandbox",
+        "tool-execution"
+      ],
+      "expected_keywords": [
+        "sandbox",
+        "隔离",
+        "权限"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "streaming-backpressure",
+      "query": "分析 SSE、WebSocket 或事件流服务在慢消费者与突发 Agent 输出下的 backpressure、缓冲、断线恢复和资源保护策略。",
+      "category": "distributed-systems",
+      "difficulty": "medium",
+      "tags": [
+        "streaming",
+        "backpressure"
+      ],
+      "expected_keywords": [
+        "backpressure",
+        "缓冲",
+        "恢复"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "service-authz-secrets",
+      "query": "设计 Agent 服务之间的认证授权与 secrets 管理方案，比较长期 API Key、短期凭据、工作负载身份与最小权限模型。",
+      "category": "security",
+      "difficulty": "hard",
+      "tags": [
+        "authz",
+        "secrets"
+      ],
+      "expected_keywords": [
+        "短期凭据",
+        "身份",
+        "最小权限"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "data-provenance-privacy",
+      "query": "研究深度研究 Agent 如何记录数据来源、处理 PII、执行数据保留/删除策略，并兼顾可审计性与隐私保护。",
+      "category": "governance",
+      "difficulty": "hard",
+      "tags": [
+        "provenance",
+        "privacy"
+      ],
+      "expected_keywords": [
+        "数据来源",
+        "PII",
+        "审计"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "structured-output-reliability",
+      "query": "比较 JSON Schema、结构化输出、语法约束解码与重试/修复策略在 LLM 工具调用和 Agent 状态更新中的可靠性。",
+      "category": "model-integration",
+      "difficulty": "medium",
+      "tags": [
+        "structured-output",
+        "schema"
+      ],
+      "expected_keywords": [
+        "JSON Schema",
+        "结构化输出",
+        "重试"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "queue-fairness-scheduling",
+      "query": "设计多租户 Agent 任务队列的调度策略，比较 FIFO、优先级、公平队列、并发配额和防止饥饿的方法。",
+      "category": "scheduling",
+      "difficulty": "hard",
+      "tags": [
+        "queue",
+        "fairness"
+      ],
+      "expected_keywords": [
+        "公平",
+        "优先级",
+        "饥饿"
+      ],
+      "expectations": {
+        "min_citation_coverage": 0.75,
+        "min_task_success_rate": 0.8,
+        "min_unique_source_hosts": 3,
+        "max_unsupported_claims": 1,
+        "max_search_calls": 20,
+        "max_research_tokens": 100000,
+        "max_wall_seconds": 600,
+        "min_keyword_recall": 0.67
+      }
+    },
+    {
+      "case_id": "multi-region-agent-recovery",
+      "query": "为长运行 Agent 服务设计多地域灾备，分析 RPO/RTO、checkpoint 复制、故障切换、重复执行和数据一致性权衡。",
+      "category": "disaster-recovery",
+      "difficulty": "hard",
+      "tags": [
+        "multi-region",
+        "recovery"
+      ],
+      "expected_keywords": [
+        "RPO",
+        "RTO",
+        "故障切换"
       ],
       "expectations": {
         "min_citation_coverage": 0.75,

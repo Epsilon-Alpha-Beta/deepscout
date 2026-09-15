@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.4.3 / Phase 4 第四批显著性检验与效应量**：保留 Benchmark/Ablation/Repeated 基座，
-> 新增 paired sign-flip permutation、Wilcoxon signed-rank、Cohen’s dz、matched rank-biserial、Cliff’s delta，以及 Holm/BH 多重比较校正。
-> 当前仍只用 synthetic fixture 验证推断统计管线；真实 LLM Provider + Tavily 缺少凭据，因此不提交伪造的真实显著性结论。
+> 当前版本为 **v0.4.4 / Phase 4 第五批 Corpus 扩容与实验检验能力规划**：保留 Benchmark/Ablation/Repeated/Significance 基座，
+> Core Corpus 扩展到 20 个跨 16 类主题的 Case，并新增 exact sign-flip 分辨率、paired-normal power、required N 与 MDE 规划。
+> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前 power 结果属于实验设计规划，不代表真实模型质量或真实效应量。
 
 ## 系统架构
 
@@ -218,7 +218,7 @@ API request middleware 新增 OpenTelemetry SERVER span，携带 request ID、ro
 
 ## Phase 4 第一批：Benchmark 与轨迹级评测
 
-新增 `benchmarks/corpora/core.json`，当前包含 6 个核心研究 Case；`scripts/run_benchmark.py --validate-only` 可在不调用任何外部 Provider 的情况下校验 Corpus。真实运行时，runner 使用 LangGraph `updates + values` stream，同时记录节点轨迹并计算 citation coverage、task success、source diversity、search calls、research tokens、worker/wall time 等指标。
+新增 `benchmarks/corpora/core.json`，当前 v1.2.0 Corpus 包含 20 个核心研究 Case / 16 个 category；`scripts/run_benchmark.py --validate-only` 可在不调用任何外部 Provider 的情况下校验 Corpus。真实运行时，runner 使用 LangGraph `updates + values` stream，同时记录节点轨迹并计算 citation coverage、task success、source diversity、search calls、research tokens、worker/wall time 等指标。
 
 Trajectory 只记录节点名、相对耗时和输出字段名，不保存模型正文或 Evidence 正文。`quality_proxy_score` 是透明的工程代理指标，仅用于版本/消融相对比较，不等同于人工事实正确率。成本估算只有显式传入 Research Worker token 与搜索单价时才产生，否则美元成本保持 `null`；当前 tracked cost 不覆盖 Analyzer/Planner/Writer 等尚未记录 token 的节点，因此不能当作完整账单成本。
 
@@ -238,7 +238,7 @@ Ablation 报告输出 quality/citation/source-diversity 与 replan/evidence/sear
 
 每个数值指标计算 `mean / sample std / median / p50 / p95`，均值置信区间使用确定性 percentile bootstrap；confidence level、resample 次数和 bootstrap seed 都写入报告。profile 与 baseline 的差异按同一 `(repetition, case)` 配对后再统计，避免把非配对样本直接相减。error/interrupted run 计入完成率，但不会以 0 值混入数值分布。
 
-输出包括 `repeated.json`、`runs.csv`、`statistics.csv`、`deltas.csv`、`report.md`，以及 quality/citation/search/token/wall-time 的均值+CI SVG 和 quality/search/wall-time 的配对 delta SVG。默认 5 次重复的完整矩阵是 `6 profiles × 6 cases × 5 = 180` 次研究运行；建议先用 `--limit 1 --repetitions 2` 做低成本 smoke。
+输出包括 `repeated.json`、`runs.csv`、`statistics.csv`、`deltas.csv`、`report.md`，以及 quality/citation/search/token/wall-time 的均值+CI SVG 和 quality/search/wall-time 的配对 delta SVG。默认 5 次重复的完整矩阵是 `6 profiles × 20 cases × 5 = 600` 次研究运行；建议先用 `--limit 1 --repetitions 2` 做低成本 smoke。
 
 只校验计划而不调用 Provider：`uv run python scripts/run_repeated_ablation.py --validate-only --repetitions 5`。真实运行可使用 `uv run python scripts/run_repeated_ablation.py --repetitions 5 --output-dir benchmark-results/repeated-ablation-latest`；默认 5 次更适合 smoke，正式统计结论应提高重复次数并优先检查 profile×case 与配对 delta。
 
@@ -248,17 +248,25 @@ Ablation 报告输出 quality/citation/source-diversity 与 replan/evidence/sear
 
 多重比较以“同一 scope + case + metric 下的非 baseline profiles”为 family，对主 permutation p-value 同时计算 Holm–Bonferroni（FWER）和 Benjamini–Hochberg（FDR）。全局 `profile_across_cases` 不把 case×repetition 当成独立样本，而是先对每个 case 的重复配对差求均值，再以 case 为统计单元。
 
-报告还显式计算 exact sign-flip 的理论最小 p、Monte Carlo 可报告最小 p 与 Holm 后的分辨率下限。当前 Core Corpus 只有 6 cases、每个 metric 有 5 个非 baseline profile 比较，因此 raw exact 最小 p 为 `0.03125`，但最理想的 Holm 下限仍约为 `0.15625`；也就是说，当前 6-case Core Corpus **不可能**产生 `Holm-adjusted p < 0.05` 的全局确认性结论。`alpha=0.05`、family size=5 时理论上至少需要 8 个 non-zero paired units 才具备 Holm 可达性。
+第四批曾通过分辨率审计发现：6-case Corpus 在 5-profile Holm family 下理论最小 adjusted p 约为 `0.15625`，无法达到 `alpha=0.05`；这一发现直接驱动第五批扩容。当前 20-case Corpus 的 two-sided exact sign-flip raw 最小 p 约为 `1.91e-6`，最保守的 5-way Holm 下限约为 `9.54e-6`，因此 exact/Holm 分辨率已不再是当前瓶颈。
 
 新增 SVG 包括 `significance_effect_sizes.svg` 和 `significance_holm_p.svg`。p-value 只描述与零效应的一致程度，正式判断仍应结合 paired delta CI、效应量、完成率和原始 run。当前多重校正只覆盖同一 metric 内的 profile family；跨 metric 的确认性声明应预注册主指标或进一步校正。
 
+## Phase 4 第五批：Corpus 扩容与 Power / MDE 规划
+
+Core Corpus 从 6 个扩展到 20 个 Case，覆盖 16 个 category；新增安全、检索、幂等副作用、Provider 路由、冲突证据、评测方法、长上下文记忆、sandbox、streaming backpressure、服务身份/Secrets、数据治理、结构化输出、队列公平和多地域恢复等主题。Corpus 版本升级为 `1.2.0`。
+
+新增 `scripts/plan_experiment.py`，在不调用任何 Provider 的情况下读取 Corpus Case 数和 Ablation family size，输出 exact sign-flip/Holm 可达性，以及基于 paired-normal + Bonferroni `alpha / family_size` 的保守 power 规划。默认 `alpha=0.05`、family size=5、target power=0.8 时，20 cases 的 MDE 约为 `Cohen dz=0.764`；假设真实效应 `dz=0.8`，近似 power 约 `84.2%`，而 `dz=0.5` 只有约 `36.7%`，达到 80% power 约需 47 个独立 Case。
+
+规划结果输出 `plan.json / plan.md / sample_sizes.csv / power_curve.csv / charts/power_curve.svg`。这是一层**实验设计近似**：Holm 没有使用简单闭式 power，而是用 Bonferroni 阈值做保守规划；最终显著性仍以真实 repeated 数据上的 permutation/Wilcoxon/Holm 分析为准。只校验规划可运行 `uv run python scripts/plan_experiment.py --validate-only`。
+
 ## 当前验证状态
 
-Phase 4 第四批当前代码已在项目隔离环境中完成验证：
+Phase 4 第五批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：81/81 通过（包含真实 Redis、Benchmark、Ablation、重复统计与显著性检验测试）；
+- `pytest`：85/85 通过（包含真实 Redis、Benchmark、Ablation、重复统计、显著性检验与 power planning 测试）；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -274,4 +282,4 @@ Phase 4 第四批当前代码已在项目隔离环境中完成验证：
 
 **Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
-**Phase 4 后续**：真实 Provider 凭据可用后执行多次真实重复实验；扩充 Core Corpus 以满足确认性检验分辨率，并补充真实成本、人工/外部事实正确率评审与更完整可视化。
+**Phase 4 后续**：真实 Provider 凭据可用后先用 20-case Corpus 做低重复 smoke，再按预算执行完整 repeated/ablation；根据真实 paired variance 重新估计 power/MDE，并视中等效应检测目标继续扩充 Case，同时补充真实成本、人工/外部事实正确率评审。

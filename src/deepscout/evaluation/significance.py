@@ -12,6 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from deepscout.evaluation.power import minimum_units_for_exact_holm
 from deepscout.evaluation.repeated import (
     STAT_METRICS,
     RepeatedExperimentReport,
@@ -409,7 +410,7 @@ def build_significance_report(
 
     _apply_multiple_corrections(comparisons, alpha=alpha)
     family_size = max(1, len(profiles))
-    minimum_pairs = max(1, math.ceil(math.log2(2.0 * family_size / alpha)))
+    minimum_pairs = minimum_units_for_exact_holm(alpha, family_size)
     return SignificanceReport(
         matrix_name=report.matrix_name,
         matrix_version=report.matrix_version,
