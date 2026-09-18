@@ -17,6 +17,18 @@ from deepscout.evaluation.ablation_report import (
     render_ablation_markdown,
     save_ablation_report,
 )
+from deepscout.evaluation.human_review import (
+    AdjudicationDecision,
+    AgreementReport,
+    CriterionRating,
+    EvaluatedHumanReview,
+    HumanGoldReview,
+    HumanReviewPacket,
+    build_blind_packet,
+    calculate_inter_rater_agreement,
+    evaluate_adjudication,
+    evaluate_human_review,
+)
 from deepscout.evaluation.metrics import calculate_metrics, evaluate_expectations
 from deepscout.evaluation.models import (
     BenchmarkCase,
@@ -69,7 +81,18 @@ from deepscout.evaluation.repeated_report import (
     save_repeated_report,
 )
 from deepscout.evaluation.report import build_report, render_markdown, save_report
+from deepscout.evaluation.review_audit import (
+    HumanReviewAuditReport,
+    HumanReviewItemOutcome,
+    build_human_review_audit,
+)
 from deepscout.evaluation.runner import load_corpus, run_case, run_corpus
+from deepscout.evaluation.runtime_quality_report import (
+    render_human_review_markdown,
+    render_source_compliance_markdown,
+    save_human_review_audit,
+    save_source_compliance_report,
+)
 from deepscout.evaluation.significance import (
     SignificanceComparison,
     SignificanceReport,
@@ -84,6 +107,11 @@ from deepscout.evaluation.significance import (
 from deepscout.evaluation.significance_report import (
     render_significance_markdown,
     save_significance_report,
+)
+from deepscout.evaluation.source_compliance import (
+    SourcePolicyCheck,
+    SourcePolicyComplianceReport,
+    score_source_policy,
 )
 from deepscout.evaluation.statistics import (
     DistributionStatistics,
@@ -170,4 +198,24 @@ __all__ = [
     "save_report",
     "summarize_distribution",
     "save_repeated_report",
+    "AdjudicationDecision",
+    "AgreementReport",
+    "CriterionRating",
+    "EvaluatedHumanReview",
+    "HumanGoldReview",
+    "HumanReviewPacket",
+    "HumanReviewAuditReport",
+    "HumanReviewItemOutcome",
+    "SourcePolicyCheck",
+    "SourcePolicyComplianceReport",
+    "build_blind_packet",
+    "build_human_review_audit",
+    "calculate_inter_rater_agreement",
+    "evaluate_adjudication",
+    "evaluate_human_review",
+    "render_human_review_markdown",
+    "render_source_compliance_markdown",
+    "save_human_review_audit",
+    "save_source_compliance_report",
+    "score_source_policy",
 ]

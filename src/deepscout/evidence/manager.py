@@ -3,8 +3,10 @@
 import hashlib
 import re
 from collections import defaultdict
+from datetime import UTC, datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from deepscout.evidence.metadata import classify_source_url
 from deepscout.models.evidence import ClaimEvidenceLink, ManagedEvidence
 from deepscout.models.result import TaskResult
 
@@ -66,6 +68,18 @@ def consolidate_evidence(
                 current = merged[existing_key]
                 current.duplicate_count += 1
                 current.claims = sorted(set(current.claims).union(item.claims))
+                if current.source_class == "unknown":
+                    current.source_class = (
+                        item.source_class
+                        if item.source_class != "unknown"
+                        else classify_source_url(canonical)
+                    )
+                if current.published_at is None and item.published_at is not None:
+                    current.published_at = item.published_at
+                if item.retrieved_at is not None and (
+                    current.retrieved_at is None or item.retrieved_at > current.retrieved_at
+                ):
+                    current.retrieved_at = item.retrieved_at
                 if item.relevance_score is not None:
                     current.relevance_score = max(
                         current.relevance_score or 0.0,
@@ -87,6 +101,13 @@ def consolidate_evidence(
                 content=item.content,
                 content_hash=fingerprint,
                 source_type=item.source_type,
+                source_class=(
+                    item.source_class
+                    if item.source_class != "unknown"
+                    else classify_source_url(canonical)
+                ),
+                published_at=item.published_at,
+                retrieved_at=item.retrieved_at or datetime.now(UTC),
                 relevance_score=item.relevance_score,
                 claims=sorted(set(item.claims)),
             )

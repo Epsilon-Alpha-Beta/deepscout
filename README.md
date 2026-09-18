@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.4.5 / Phase 4 第六批 Benchmark Case 质量控制层**：保留 Benchmark/Ablation/Repeated/Significance 基座，
-> Core Corpus 扩展到 20 个跨 16 类主题的 Case，并新增 exact sign-flip 分辨率、paired-normal power、required N 与 MDE 规划。
-> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前 power 结果属于实验设计规划，不代表真实模型质量或真实效应量。
+> 当前版本为 **v0.4.6 / Phase 4 第七批运行后来源合规与人工盲评**：保留 Benchmark/Ablation/Repeated/Significance/Power/Case-QC 基座，
+> 新增 Evidence 来源元数据、source-policy compliance、双人盲评、Cohen κ / quadratic weighted κ 与 adjudication 工作流。
+> 真实 LLM Provider + Tavily 仍缺少凭据，因此不提交伪造的真实来源合规率、人工 gold 分数或 agreement 结论。
 
 ## 系统架构
 
@@ -268,13 +268,23 @@ Core Corpus v1.3.0 为 20/20 Case 新增 `topic_group`、`source_policy` 与 `go
 
 新增 `scripts/audit_benchmark.py --validate-only --strict`，静态审计 source/rubric 覆盖、域名合法性、freshness、topic/category/difficulty balance、单一来源域集中度和 Case 标签/关键词重叠。当前 20 Case 被归入 7 个 topic group，最大 topic share=20%，difficulty=70% hard/30% medium，freshness coverage=70%，严格审计为 0 error / 0 warning。完整报告输出 `quality.json / quality.md / cases.csv / charts/topic_balance.svg / charts/difficulty_balance.svg`。
 
+## Phase 4 第七批：运行后来源合规与人工盲评
+
+Evidence 新增 `source_class / published_at / retrieved_at`。`web_search` 程序化写入检索时间和已知权威域名的 source class；只有 Provider 真返回日期时才透传 `published_at`。Evidence Manager 在模型遗漏时确定性补 source class 与入库时间，但绝不猜测发布时间。
+
+新增 `scripts/score_source_policy.py`：对真实 `evidence_store` 检查最少 primary sources 与 freshness。freshness 缺可靠 `published_at` 时状态为 `unverifiable`，不会把未知日期伪装成近期或过期。输出 `source_compliance.json / source_compliance.md`。
+
+新增 `scripts/review_benchmark.py`：`prepare` 生成不含 model/profile/provider 身份的 blind packet；两个 reviewer 分别按 0–4 ordinal rubric 独立评分。系统计算 pass/fail Cohen's κ、criterion-level quadratic weighted κ 与 score gap；pass 分歧、critical-error 分歧或超过阈值的 score gap 必须 adjudication，不能用自动平均掩盖。输出 `human_review_audit.json / human_review_audit.md / human_review_outcomes.csv`。
+
+工程 `quality_proxy_score`、自动 source-policy compliance 与人工 gold score 始终保持三条独立指标轴。真实运行后的合规率和人工评分仍需等真实 Provider Evidence 产生后执行。
+
 ## 当前验证状态
 
-Phase 4 第六批当前代码已在项目隔离环境中完成验证：
+Phase 4 第七批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：89/89 通过（包含真实 Redis、Benchmark、Ablation、重复统计、显著性检验、power planning 与 Benchmark quality-control 测试）；
+- `pytest`：100/100 通过（真实 Redis，无 skip；覆盖 Case QC、Evidence metadata、source compliance、双人盲评与 adjudication）；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -290,4 +300,4 @@ Phase 4 第六批当前代码已在项目隔离环境中完成验证：
 
 **Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
-**Phase 4 后续**：真实 Provider 凭据可用后先用 20-case Corpus 做低重复 smoke；真实运行后按 gold rubric 做盲评/双人复核，并将 source-policy compliance、人工事实正确率与现有统计链合并，再根据真实 paired variance 重新估计 power/MDE。
+**Phase 4 后续**：真实 Provider 凭据可用后先做低成本 Evidence/source-compliance smoke，再对同一 blind item 做独立双评审与必要 adjudication；将真实来源合规率、人工 gold score 与现有统计链合并，并用真实 paired variance 重新估计 power/MDE。

@@ -1,6 +1,6 @@
 # Phase 4：Benchmark 与轨迹级评测
 
-Phase 4 分六批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus，并加入样本量、power 与 detectable-effect 规划；第六批建立 Case 来源政策、人工 gold rubric 与 balance 审计。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实显著性结论。
+Phase 4 分七批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus 并加入 power/MDE 规划；第六批建立 Case 来源政策、人工 gold rubric 与 balance 审计；第七批把质量控制延伸到真实 Evidence 与人工双盲评审。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实质量结论。
 
 ## Benchmark Corpus
 
@@ -186,12 +186,22 @@ uv run python scripts/audit_benchmark.py --strict \
 
 输出包括 `quality.json`、`quality.md`、`cases.csv`、`charts/topic_balance.svg` 和 `charts/difficulty_balance.svg`。
 
+## 第七批：运行后来源合规与人工双盲评审
+
+Evidence schema 增加 `source_class / published_at / retrieved_at`。`web_search` 的 `source_class` 与 `retrieved_at` 由程序生成，`published_at` 只透传 Provider 真正提供的 metadata；Evidence Manager 对 `source_class=unknown` 和缺失 `retrieved_at` 做确定性兜底，但绝不推测发布日期。
+
+`score_source_policy()` 按 Case 的 `source_policy` 计算 primary-source 数、preferred-domain 命中、recent-source 数与 freshness metadata 覆盖。若 freshness 必需但 Evidence 没有可靠 `published_at`，对应 check 为 `unverifiable`，整体不视为通过。CLI：`uv run python scripts/score_source_policy.py --case-id <id> --evidence <json>`。
+
+人工层使用不携带 model/profile/provider 身份的 `HumanReviewPacket`。每位 reviewer 独立提交 0–4 ordinal criterion ratings、required-point coverage 和 critical-error flags；weighted score 归一到 0–1，critical error 是独立 veto。双评审后计算 pass/fail Cohen's κ、criterion-level quadratic weighted κ 与平均 score gap。pass/critical 分歧或 score gap 达阈值的 blind item 必须进入 adjudication。
+
+`review_benchmark.py prepare` 生成盲评包；`review_benchmark.py audit` 汇总 reviewer/adjudicator JSON，并输出 `human_review_audit.json / human_review_audit.md / human_review_outcomes.csv`。工程 proxy、自动 source compliance 和人工 gold score 是三条独立指标轴，不相互冒充。
+
 ## 当前验证边界
 
-第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告；第六批验证 source/rubric 完整性、域名/freshness 策略与 Corpus balance guard。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
+第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告；第六批验证 source/rubric 完整性、域名/freshness 策略与 Corpus balance guard；第七批验证 Evidence metadata、source-policy compliance、双评审 agreement 与 adjudication。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
 
-真实 Provider + Tavily 仍因服务器缺少凭据而阻塞，因此 `core.json` 当前只有 Case/阈值定义，没有提交伪造的真实结果文件。
+真实 Provider + Tavily 仍因服务器缺少凭据而阻塞，因此当前只验证运行后质量管线的 synthetic fixture，不提交伪造的真实来源合规率、人工 gold score 或 agreement 结论。
 
 ## 后续批次
 
-真实 Provider 凭据可用后，先用 `--limit 1`/低 repetitions 做链路 smoke，再按预算运行 20-case repeated/ablation；用真实 paired variance 回填 `--paired-std` 并重新估计 MDE/required N。若目标转向 `dz≈0.5` 的中等效应确认性结论，应优先继续扩充独立 Case，而不是只增加同一 Case 的 repetitions。对于 citation 消融继续保持“保留 verifier 测量、只关闭 feedback”的实验设计，避免测量口径随处理组变化。
+真实 Provider 凭据可用后，先用低成本 Case 产生真实 Evidence，执行 source-policy compliance；随后生成 blind packet 做独立双评审与必要 adjudication，再按预算运行 20-case repeated/ablation，并用真实 paired variance 回填 `--paired-std`。若目标转向 `dz≈0.5` 的中等效应确认性结论，应优先继续扩充独立 Case，而不是只增加同一 Case 的 repetitions。对于 citation 消融继续保持“保留 verifier 测量、只关闭 feedback”的实验设计，避免测量口径随处理组变化。

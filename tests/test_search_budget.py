@@ -63,3 +63,58 @@ def test_web_search_does_not_call_provider_after_budget_exhaustion():
         payload = json.loads(web_search.invoke({"query": "no network call"}))
     assert payload["error"] == "search_budget_exhausted"
     assert counter.used == 0
+
+
+def test_web_search_emits_reliable_source_metadata(monkeypatch):
+    import json
+    from datetime import datetime
+
+    import deepscout.tools.web_search as web_search_module
+    from deepscout.runtime.search_budget import research_search_budget
+
+    class FakeClient:
+        def search(self, **kwargs):
+            return {
+                "results": [
+                    {
+                        "title": "LangGraph docs",
+                        "url": "https://docs.langchain.com/oss/python/langgraph/overview",
+                        "content": "body",
+                        "score": 0.9,
+                        "published_date": "2026-08-01T00:00:00+00:00",
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(web_search_module, "TavilyClient", lambda: FakeClient())
+    with research_search_budget(1):
+        payload = json.loads(web_search_module.web_search.invoke({"query": "langgraph"}))
+    item = payload["results"][0]
+    assert item["source_class"] == "official_docs"
+    assert item["published_at"] == "2026-08-01T00:00:00+00:00"
+    assert datetime.fromisoformat(item["retrieved_at"]).tzinfo is not None
+
+
+def test_web_search_drops_unparseable_published_date(monkeypatch):
+    import json
+
+    import deepscout.tools.web_search as web_search_module
+    from deepscout.runtime.search_budget import research_search_budget
+
+    class FakeClient:
+        def search(self, **kwargs):
+            return {
+                "results": [
+                    {
+                        "title": "Unknown date",
+                        "url": "https://example.com/page",
+                        "content": "body",
+                        "published_date": "not-a-date",
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(web_search_module, "TavilyClient", lambda: FakeClient())
+    with research_search_budget(1):
+        payload = json.loads(web_search_module.web_search.invoke({"query": "date"}))
+    assert payload["results"][0]["published_at"] is None
