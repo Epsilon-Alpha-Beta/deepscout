@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.5.2 / Phase 4 第十三批 Artifact-driven GitHub Actions Gate**：保留前十二批完整 Benchmark/Quality/Statistics/Bundle/Registry/Lifecycle/Release Gate 基座，
-> 新增可复用 GitHub Actions 发布门禁：从 workflow artifact 恢复 Experiment Bundles，重建 Registry，执行 Release Gate，并回传可审计结果。
-> 真实 LLM Provider + Tavily 仍缺少凭据，因此 CI 只用 synthetic bundle artifact 验证流水线；不会把 smoke fixture 当作真实实验结论。
+> 当前版本为 **v0.5.3 / Phase 4 第十四批 Sharded Benchmark Experiment Producer**：保留前十三批完整 Benchmark/Quality/Statistics/Bundle/Registry/Lifecycle/Release Gate 基座，
+> 新增手动 GitHub Actions Experiment Producer：低成本 smoke 与正式 600-run 协议严格分离；正式实验采用 20 个 shard 执行、确定性合并、历史 lineage 继承，并自动进入 Release Gate。
+> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前只验证 producer contract 与 synthetic 600-run shard merge，不把离线 fixture 当作真实实验结论。
 
 ## 系统架构
 
@@ -346,13 +346,27 @@ Gate 无论成功还是被策略阻塞，都会尽可能把 Registry、`release_
 
 主 `CI` 增加 artifact-boundary smoke：测试 job 生成现有 synthetic bundle history，并以 1 天保留期上传 `deepscout-experiment-bundles-smoke`；随后通过 reusable workflow 对 accepted `b3` 执行真实 artifact 下载 → Registry rebuild → Release Gate。该 smoke 验证的是流水线与 artifact 边界，不代表真实 Provider 质量结果。
 
+## Phase 4 第十四批：Sharded Benchmark Experiment Producer
+
+新增 `.github/workflows/benchmark-producer.yml`，仅通过 `workflow_dispatch` 手动触发，不会在普通 push/PR 时消耗真实 Provider 配额。Producer 将真实凭据只注入需要调用 LLM/Tavily 的 job；缺少对应 Provider key 或 `TAVILY_API_KEY` 时，现有 staged live preflight 会明确失败并留下诊断 artifact，不会继续生成伪造 Bundle。
+
+Producer 提供两个彼此隔离的协议。`smoke` 固定执行 1 case × 6 profiles × 1 repetition = 6 runs，产出独立的 `deepscout-live-smoke-bundle-*`，明确不进入 Release Gate；`official` 固定执行 Core Corpus 20 cases × 6 profiles × 5 repetitions = 600 runs，并要求显式确认字符串。继续既有 lineage 时必须提供数值型 `history_run_id` + `RUN_OFFICIAL_600`；新建 lineage 时必须明确选择 `new` 并输入 `RUN_OFFICIAL_600_NEW_LINEAGE`，从而避免因漏填历史 run 而静默把 candidate 变成新的 baseline root。
+
+GitHub-hosted runner 单 job 存在 6 小时执行上限，因此 official 不把 600 runs 串在单 job 中。工作流按 5 repetitions × 4 个 case shard 拆成 20 个 matrix job，每个 shard 恰好执行 5 cases × 6 profiles = 30 runs，`max-parallel=2`。每个 repetition 的 profile 顺序通过临时 Matrix 预先轮转，shard 内使用 `order_strategy=fixed`，避免并行分片破坏原先 repetition-level rotation 设计。
+
+新增 `src/deepscout/evaluation/repeated_merge.py` 与 `scripts/merge_repeated_ablation.py`。汇总阶段递归发现 shard metadata，校验 canonical Corpus/Matrix identity、bootstrap 配置、case 内容、profile 集合、路径边界、重复 shard、重复运行单元和完整 coverage，再按 canonical case 顺序与目标 profile rotation 重建全局 `execution_order`。只有 600 个 `(repetition, profile, case)` 单元恰好各出现一次才会生成最终 `repeated.json`、显著性报告与正式 Experiment Bundle。
+
+`official/continue` 会从指定历史 producer run 下载 `deepscout-experiment-bundles`，先对旧 lineage 执行完整 Registry validation，再追加当前 candidate；`official/new` 则显式从空 lineage 启动。最终组合 artifact 上传后直接复用第十三批 Release Gate，因此 Registry comparison、Promotion eligibility、Retention preview 与 audit artifact 不需要在 Producer 中重复实现。
+
+本地已用 20 个 synthetic shard 验证与正式协议同形的合并路径：20 shards → 600 runs，600 个运行 identity 全部唯一，最终 `repetitions=5`、`order_strategy=rotate`；同时验证 duplicate shard、缺失 coverage 和 repeated-path 越界均被拒绝。这些验证只证明分片生产管线正确，不代表真实 Provider 的质量或性能结果。
+
 ## 当前验证状态
 
-Phase 4 第十三批当前代码已在项目隔离环境中完成验证：
+Phase 4 第十四批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：122/122 通过（真实 Redis，无 skip；覆盖 Release Gate、Promotion/Override/Retention、安全删除与历史回归）；
+- `pytest`：127/127 通过（真实 Redis，无 skip；新增覆盖 shard merge、rotation、duplicate/missing/path-escape guards）；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -363,9 +377,10 @@ Phase 4 第十三批当前代码已在项目隔离环境中完成验证：
 - Live Provider：当前因缺少 Provider/Tavily 凭据而阻塞；
 - Live E2E 诊断：已拆分为 Provider Probe → Tavily Probe → Full Graph 三阶段，并支持 JSON 结果输出与阶段级故障定位；
 - GitHub Actions：CI 在每次 push/PR 后执行 Install、Ruff、Tests，并通过 Actions artifact 运行 Release Gate smoke；远端已验证 7 Bundle 下载、Registry rebuild、`b3 passed/promote` 与 audit artifact 上传链路。
+- Experiment Producer：本地协议 guard、20-shard/600-run synthetic merge 与 merge safety guards 已通过；真实 smoke/official 仍等待 Provider/Tavily 凭据后手动触发。
 
 ## 后续路线
 
 **Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
-**Phase 4 后续**：真实 Provider 凭据可用后，由真实 Benchmark/Repeated workflow 上传 Experiment Bundle artifact，直接复用当前 artifact-driven release gate；通过后再由 promotion/retention lifecycle 管理正式基线、milestone 与历史资产，并用真实 paired variance 回填 power/MDE。
+**Phase 4 后续**：真实 Provider/Tavily 凭据可用后，先手动运行第十四批 `smoke` producer 验证云端凭据与真实调用，再以显式 `new` 启动首条 official lineage；后续 official run 使用上一条 producer run ID 继续 lineage，并用真实 paired variance 回填 power/MDE。

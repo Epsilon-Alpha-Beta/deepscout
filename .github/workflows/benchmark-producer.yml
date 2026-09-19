@@ -1,0 +1,550 @@
+name: Benchmark Experiment Producer
+
+on:
+  workflow_dispatch:
+    inputs:
+      protocol:
+        description: "smoke=6 runs without Release Gate; official=fixed 600-run protocol with Release Gate."
+        required: true
+        type: choice
+        options:
+          - smoke
+          - official
+        default: smoke
+      model:
+        description: "LangChain model identifier, for example anthropic:claude-sonnet-4-6."
+        required: true
+        type: string
+        default: anthropic:claude-sonnet-4-6
+      lineage_mode:
+        description: "official only: continue requires history_run_id; new starts a new release lineage."
+        required: true
+        type: choice
+        options:
+          - continue
+          - new
+        default: continue
+      history_run_id:
+        description: "official/continue only: prior producer run ID containing deepscout-experiment-bundles."
+        required: false
+        type: string
+        default: ""
+      confirmation:
+        description: "official requires RUN_OFFICIAL_600; new lineage requires RUN_OFFICIAL_600_NEW_LINEAGE."
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      candidate_id: ${{ steps.identity.outputs.experiment_id }}
+    env:
+      DEEPSCOUT_MODEL: ${{ inputs.model }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.11"
+          version: "latest-known"
+
+      - name: Install benchmark runtime
+        run: uv sync --frozen --no-dev
+
+      - name: Validate producer protocol
+        env:
+          DEEPSCOUT_PROTOCOL: ${{ inputs.protocol }}
+          DEEPSCOUT_LINEAGE_MODE: ${{ inputs.lineage_mode }}
+          DEEPSCOUT_HISTORY_RUN_ID: ${{ inputs.history_run_id }}
+          DEEPSCOUT_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [[ "$DEEPSCOUT_PROTOCOL" == "smoke" ]]; then
+            if [[ -n "$DEEPSCOUT_HISTORY_RUN_ID" ]]; then
+              echo "smoke protocol does not consume history_run_id" >&2
+              exit 2
+            fi
+            exit 0
+          fi
+
+          if [[ "$DEEPSCOUT_LINEAGE_MODE" == "continue" ]]; then
+            if [[ ! "$DEEPSCOUT_HISTORY_RUN_ID" =~ ^[0-9]+$ ]]; then
+              echo "official/continue requires numeric history_run_id" >&2
+              exit 2
+            fi
+            if [[ "$DEEPSCOUT_CONFIRMATION" != "RUN_OFFICIAL_600" ]]; then
+              echo "official/continue requires confirmation=RUN_OFFICIAL_600" >&2
+              exit 2
+            fi
+          else
+            if [[ -n "$DEEPSCOUT_HISTORY_RUN_ID" ]]; then
+              echo "official/new must not specify history_run_id" >&2
+              exit 2
+            fi
+            if [[ "$DEEPSCOUT_CONFIRMATION" != "RUN_OFFICIAL_600_NEW_LINEAGE" ]]; then
+              echo "official/new requires confirmation=RUN_OFFICIAL_600_NEW_LINEAGE" >&2
+              exit 2
+            fi
+          fi
+
+      - name: Resolve experiment identity
+        id: identity
+        env:
+          DEEPSCOUT_PROTOCOL: ${{ inputs.protocol }}
+        run: |
+          if [[ "$DEEPSCOUT_PROTOCOL" == "official" ]]; then
+            experiment_id="exp-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          else
+            experiment_id="smoke-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          fi
+          echo "experiment_id=${experiment_id}" >> "$GITHUB_OUTPUT"
+          echo "experiment_id=${experiment_id}"
+
+      - name: Validate planned workload
+        env:
+          DEEPSCOUT_PROTOCOL: ${{ inputs.protocol }}
+        run: |
+          if [[ "$DEEPSCOUT_PROTOCOL" == "official" ]]; then
+            uv run python scripts/run_repeated_ablation.py --validate-only --repetitions 5 --order-strategy rotate
+          else
+            uv run python scripts/run_repeated_ablation.py --validate-only --repetitions 1 --limit 1 --order-strategy rotate
+          fi
+
+      - name: Prepare live diagnostics
+        run: mkdir -p benchmark-results/producer/meta
+
+      - name: Run live Provider/Tavily preflight
+        run: >
+          uv run python scripts/check_live_e2e.py
+          --probe-timeout 30
+          --graph-timeout 240
+          --output benchmark-results/producer/meta/live-e2e.json
+
+      - name: Upload preflight diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: deepscout-producer-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          path: benchmark-results/producer/meta
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Publish preflight summary
+        if: ${{ success() }}
+        env:
+          DEEPSCOUT_PROTOCOL: ${{ inputs.protocol }}
+          DEEPSCOUT_EXPERIMENT_ID: ${{ steps.identity.outputs.experiment_id }}
+        run: |
+          echo "## DeepScout Producer Preflight" >> "$GITHUB_STEP_SUMMARY"
+          echo "- protocol: $DEEPSCOUT_PROTOCOL" >> "$GITHUB_STEP_SUMMARY"
+          echo "- experiment: $DEEPSCOUT_EXPERIMENT_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo "- model: $DEEPSCOUT_MODEL" >> "$GITHUB_STEP_SUMMARY"
+
+  smoke:
+    if: ${{ inputs.protocol == 'smoke' && needs.preflight.result == 'success' }}
+    needs: preflight
+    runs-on: ubuntu-latest
+    env:
+      DEEPSCOUT_MODEL: ${{ inputs.model }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      DEEPSCOUT_EXPERIMENT_ID: ${{ needs.preflight.outputs.candidate_id }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.11"
+          version: "latest-known"
+
+      - name: Install benchmark runtime
+        run: uv sync --frozen --no-dev
+
+      - name: Download preflight diagnostics
+        uses: actions/download-artifact@v8
+        with:
+          name: deepscout-producer-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          path: benchmark-results/producer/meta
+
+      - name: Run live smoke repeated benchmark
+        run: >
+          uv run python scripts/run_repeated_ablation.py
+          --repetitions 1
+          --limit 1
+          --order-strategy rotate
+          --bootstrap-resamples 200
+          --confidence-level 0.95
+          --alpha 0.05
+          --exact-permutation-max-pairs 16
+          --permutation-resamples 1000
+          --output-dir benchmark-results/producer/run
+
+      - name: Write smoke producer metadata
+        run: |
+          mkdir -p benchmark-results/producer/meta benchmark-results/producer/bundles
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = {
+              "workflow": "benchmark-producer",
+              "workflow_run_id": os.environ["GITHUB_RUN_ID"],
+              "workflow_run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "experiment_id": os.environ["DEEPSCOUT_EXPERIMENT_ID"],
+              "protocol": "smoke",
+              "case_limit": 1,
+              "repetitions": 1,
+              "planned_runs": 6,
+              "release_gate": False,
+          }
+          Path("benchmark-results/producer/meta/producer-config.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Resolve provider metadata
+        run: echo "DEEPSCOUT_PROVIDER=${DEEPSCOUT_MODEL%%:*}" >> "$GITHUB_ENV"
+
+      - name: Create live smoke Experiment Bundle
+        run: >
+          uv run python scripts/create_experiment_bundle.py
+          --repeated benchmark-results/producer/run/repeated.json
+          --corpus benchmarks/corpora/core.json
+          --matrix benchmarks/ablations/core.json
+          --provider "$DEEPSCOUT_PROVIDER"
+          --model "$DEEPSCOUT_MODEL"
+          --experiment-id "$DEEPSCOUT_EXPERIMENT_ID"
+          --git-sha "$GITHUB_SHA"
+          --config-json "$(cat benchmark-results/producer/meta/producer-config.json)"
+          --extra-artifact live_e2e=benchmark-results/producer/meta/live-e2e.json
+          --extra-artifact significance=benchmark-results/producer/run/significance.json
+          --extra-artifact report=benchmark-results/producer/run/report.md
+          --extra-artifact producer_config=benchmark-results/producer/meta/producer-config.json
+          --output-dir "benchmark-results/producer/bundles/$DEEPSCOUT_EXPERIMENT_ID"
+
+      - name: Validate live smoke Bundle
+        run: >
+          uv run python scripts/create_experiment_bundle.py
+          --validate "benchmark-results/producer/bundles/$DEEPSCOUT_EXPERIMENT_ID"
+
+      - name: Build smoke Registry preview
+        run: >
+          uv run python scripts/build_experiment_registry.py
+          --bundles-root benchmark-results/producer/bundles
+          --fail-on-invalid
+          --output-dir benchmark-results/producer/registry-preview
+
+      - name: Upload live smoke bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: deepscout-live-smoke-bundle-${{ needs.preflight.outputs.candidate_id }}
+          path: benchmark-results/producer/bundles/${{ needs.preflight.outputs.candidate_id }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload live smoke reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: deepscout-live-smoke-reports-${{ needs.preflight.outputs.candidate_id }}
+          path: |
+            benchmark-results/producer/run
+            benchmark-results/producer/registry-preview
+            benchmark-results/producer/meta
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish smoke summary
+        run: |
+          echo "## Live Smoke Result" >> "$GITHUB_STEP_SUMMARY"
+          echo "- experiment: $DEEPSCOUT_EXPERIMENT_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo "- runs: 6" >> "$GITHUB_STEP_SUMMARY"
+          echo "- release gate: disabled by protocol" >> "$GITHUB_STEP_SUMMARY"
+
+  official-shard:
+    if: ${{ inputs.protocol == 'official' && needs.preflight.result == 'success' }}
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: true
+      max-parallel: 2
+      matrix:
+        repetition: [1, 2, 3, 4, 5]
+        case_shard: [0, 1, 2, 3]
+    env:
+      DEEPSCOUT_MODEL: ${{ inputs.model }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      DEEPSCOUT_REPETITION: ${{ matrix.repetition }}
+      DEEPSCOUT_CASE_SHARD: ${{ matrix.case_shard }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.11"
+          version: "latest-known"
+
+      - name: Install benchmark runtime
+        run: uv sync --frozen --no-dev
+
+      - name: Build shard corpus and rotated matrix
+        run: |
+          mkdir -p benchmark-results/shard/run
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          repetition = int(os.environ["DEEPSCOUT_REPETITION"])
+          case_shard = int(os.environ["DEEPSCOUT_CASE_SHARD"])
+          corpus = json.loads(Path("benchmarks/corpora/core.json").read_text())
+          matrix = json.loads(Path("benchmarks/ablations/core.json").read_text())
+          if len(corpus["cases"]) != 20 or len(matrix["profiles"]) != 6:
+              raise SystemExit("official protocol requires 20 core cases and 6 profiles")
+
+          start = case_shard * 5
+          cases = corpus["cases"][start : start + 5]
+          if len(cases) != 5:
+              raise SystemExit(f"case shard {case_shard} does not contain 5 cases")
+          corpus["cases"] = cases
+
+          offset = (repetition - 1) % len(matrix["profiles"])
+          matrix["profiles"] = matrix["profiles"][offset:] + matrix["profiles"][:offset]
+
+          root = Path("benchmark-results/shard")
+          (root / "corpus.json").write_text(
+              json.dumps(corpus, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          (root / "matrix.json").write_text(
+              json.dumps(matrix, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          (root / "shard.json").write_text(
+              json.dumps(
+                  {
+                      "repetition": repetition,
+                      "case_shard": case_shard,
+                      "case_ids": [case["case_id"] for case in cases],
+                      "repeated_path": "run/repeated.json",
+                  },
+                  ensure_ascii=False,
+                  indent=2,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Run official benchmark shard
+        run: >
+          uv run python scripts/run_repeated_ablation.py
+          --corpus benchmark-results/shard/corpus.json
+          --matrix benchmark-results/shard/matrix.json
+          --repetitions 1
+          --order-strategy fixed
+          --bootstrap-resamples 2000
+          --confidence-level 0.95
+          --alpha 0.05
+          --exact-permutation-max-pairs 16
+          --permutation-resamples 1000
+          --output-dir benchmark-results/shard/run
+
+      - name: Upload official benchmark shard
+        uses: actions/upload-artifact@v7
+        with:
+          name: deepscout-benchmark-shard-r${{ matrix.repetition }}-c${{ matrix.case_shard }}
+          path: |
+            benchmark-results/shard/shard.json
+            benchmark-results/shard/run/repeated.json
+          if-no-files-found: error
+          retention-days: 7
+
+  official-assemble:
+    if: ${{ inputs.protocol == 'official' && needs.preflight.result == 'success' && needs.official-shard.result == 'success' }}
+    needs:
+      - preflight
+      - official-shard
+    runs-on: ubuntu-latest
+    env:
+      DEEPSCOUT_MODEL: ${{ inputs.model }}
+      DEEPSCOUT_EXPERIMENT_ID: ${{ needs.preflight.outputs.candidate_id }}
+      DEEPSCOUT_LINEAGE_MODE: ${{ inputs.lineage_mode }}
+      DEEPSCOUT_HISTORY_RUN_ID: ${{ inputs.history_run_id }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.11"
+          version: "latest-known"
+
+      - name: Install benchmark runtime
+        run: uv sync --frozen --no-dev
+
+      - name: Download preflight diagnostics
+        uses: actions/download-artifact@v8
+        with:
+          name: deepscout-producer-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          path: benchmark-results/producer/meta
+
+      - name: Download official shards
+        uses: actions/download-artifact@v8
+        with:
+          pattern: deepscout-benchmark-shard-*
+          path: benchmark-results/producer/shards
+          merge-multiple: false
+
+      - name: Merge official repeated experiment
+        run: >
+          uv run python scripts/merge_repeated_ablation.py
+          --shards-root benchmark-results/producer/shards
+          --corpus benchmarks/corpora/core.json
+          --matrix benchmarks/ablations/core.json
+          --repetitions 5
+          --order-strategy rotate
+          --alpha 0.05
+          --exact-permutation-max-pairs 16
+          --permutation-resamples 20000
+          --output-dir benchmark-results/producer/run
+
+      - name: Prepare lineage directories
+        run: mkdir -p benchmark-results/producer/bundles
+
+      - name: Restore official lineage history
+        if: ${{ inputs.lineage_mode == 'continue' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: deepscout-experiment-bundles
+          path: benchmark-results/producer/bundles
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.history_run_id }}
+
+      - name: Verify restored lineage
+        if: ${{ inputs.lineage_mode == 'continue' }}
+        run: |
+          manifest_count="$(find benchmark-results/producer/bundles -type f -name manifest.json | wc -l)"
+          echo "restored_manifests=${manifest_count}"
+          test "$manifest_count" -gt 0
+          uv run python scripts/build_experiment_registry.py --bundles-root benchmark-results/producer/bundles --fail-on-invalid --output-dir benchmark-results/producer/history-registry
+
+      - name: Write official producer metadata
+        run: |
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = {
+              "workflow": "benchmark-producer",
+              "workflow_run_id": os.environ["GITHUB_RUN_ID"],
+              "workflow_run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "experiment_id": os.environ["DEEPSCOUT_EXPERIMENT_ID"],
+              "protocol": "official",
+              "case_limit": None,
+              "repetitions": 5,
+              "planned_runs": 600,
+              "shard_count": 20,
+              "max_parallel": 2,
+              "lineage_mode": os.environ["DEEPSCOUT_LINEAGE_MODE"],
+              "history_run_id": os.environ["DEEPSCOUT_HISTORY_RUN_ID"] or None,
+              "release_gate": True,
+          }
+
+          Path("benchmark-results/producer/meta/producer-config.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Resolve provider metadata
+        run: echo "DEEPSCOUT_PROVIDER=${DEEPSCOUT_MODEL%%:*}" >> "$GITHUB_ENV"
+
+      - name: Create official Experiment Bundle
+        run: >
+          uv run python scripts/create_experiment_bundle.py
+          --repeated benchmark-results/producer/run/repeated.json
+          --corpus benchmarks/corpora/core.json
+          --matrix benchmarks/ablations/core.json
+          --provider "$DEEPSCOUT_PROVIDER"
+          --model "$DEEPSCOUT_MODEL"
+          --experiment-id "$DEEPSCOUT_EXPERIMENT_ID"
+          --git-sha "$GITHUB_SHA"
+          --config-json "$(cat benchmark-results/producer/meta/producer-config.json)"
+          --extra-artifact live_e2e=benchmark-results/producer/meta/live-e2e.json
+          --extra-artifact significance=benchmark-results/producer/run/significance.json
+          --extra-artifact report=benchmark-results/producer/run/report.md
+          --extra-artifact statistics=benchmark-results/producer/run/statistics.csv
+          --extra-artifact deltas=benchmark-results/producer/run/deltas.csv
+          --extra-artifact producer_config=benchmark-results/producer/meta/producer-config.json
+          --output-dir "benchmark-results/producer/bundles/$DEEPSCOUT_EXPERIMENT_ID"
+
+      - name: Validate official Bundle
+        run: >
+          uv run python scripts/create_experiment_bundle.py
+          --validate "benchmark-results/producer/bundles/$DEEPSCOUT_EXPERIMENT_ID"
+
+      - name: Build official Registry preview
+        run: >
+          uv run python scripts/build_experiment_registry.py
+          --bundles-root benchmark-results/producer/bundles
+          --fail-on-invalid
+          --output-dir benchmark-results/producer/registry-preview
+
+      - name: Upload official experiment lineage
+        uses: actions/upload-artifact@v7
+        with:
+          name: deepscout-experiment-bundles
+          path: benchmark-results/producer/bundles
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload official producer reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: deepscout-producer-reports-${{ needs.preflight.outputs.candidate_id }}
+          path: |
+            benchmark-results/producer/run
+            benchmark-results/producer/registry-preview
+            benchmark-results/producer/meta
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish official producer summary
+        run: |
+          echo "## Official Experiment Producer" >> "$GITHUB_STEP_SUMMARY"
+          echo "- experiment: $DEEPSCOUT_EXPERIMENT_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo "- runs: 600" >> "$GITHUB_STEP_SUMMARY"
+          echo "- shards: 20 (max-parallel=2)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- lineage mode: $DEEPSCOUT_LINEAGE_MODE" >> "$GITHUB_STEP_SUMMARY"
+          echo "- release gate: enabled" >> "$GITHUB_STEP_SUMMARY"
+
+  release-gate:
+    if: ${{ inputs.protocol == 'official' && needs.preflight.result == 'success' && needs.official-assemble.result == 'success' }}
+    needs:
+      - preflight
+      - official-assemble
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/release-gate.yml
+    with:
+      candidate_id: ${{ needs.preflight.outputs.candidate_id }}
+      artifact_name: deepscout-experiment-bundles

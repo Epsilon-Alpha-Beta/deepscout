@@ -156,6 +156,12 @@ from deepscout.evaluation.repeated import (
     build_repeated_report,
     run_repeated_ablation,
 )
+from deepscout.evaluation.repeated_merge import (
+    LoadedRepeatedShard,
+    RepeatedShardMetadata,
+    load_repeated_shards,
+    merge_repeated_shards,
+)
 from deepscout.evaluation.repeated_report import (
     render_repeated_markdown,
     save_repeated_report,
@@ -243,6 +249,10 @@ __all__ = [
     "RepeatedExperimentReport",
     "RepeatedRunRecord",
     "RepeatedScopeStatistics",
+    "RepeatedShardMetadata",
+    "LoadedRepeatedShard",
+    "load_repeated_shards",
+    "merge_repeated_shards",
     "TrajectoryEvent",
     "SignificanceComparison",
     "SignificanceReport",

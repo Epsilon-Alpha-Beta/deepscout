@@ -1,7 +1,7 @@
 {
   "project": "DeepScout",
-  "version": "0.5.2",
-  "phase": "Phase 4 - batch 13",
+  "version": "0.5.3",
+  "phase": "Phase 4 - batch 14",
   "validation": {
     "benchmark_corpus": "passed_20_cases_16_categories_v1.3.0",
     "promotion_policy": "passed_valid_status_clean_git_zero_regression_defaults",
@@ -22,9 +22,9 @@
     "ablation_matrix": "passed_6_profiles_120_planned_runs",
     "repeated_experiment_protocol": "passed_600_planned_default_runs",
     "current_mde_dz": "0.7642_at_alpha0.05_family5_power0.8",
-    "pytest_with_redis": "122 passed",
+    "pytest_with_redis": "127 passed",
     "ruff": "passed",
-    "project_version": "0.5.2",
+    "project_version": "0.5.3",
     "container_experiment_lifecycle_validate": "passed_v0.5.0_nonroot_promotion_override_dryrun_apply_exact_delete_api_healthcheck",
     "live_provider_benchmark": "blocked_missing_credentials",
     "real_promotion_decision": "not_run_without_live_provider_bundles",
@@ -42,6 +42,14 @@
     "artifact_gate_ci_smoke": "passed_remote_github_actions_current_run_artifact_registry_gate_audit",
     "artifact_gate_remote_registry": "passed_7_valid_0_invalid_1_group_b3_promote",
     "artifact_gate_remote_audit": "passed_release_gate_audit_artifact_uploaded",
-    "artifact_gate_historical_run_mode": "contract_verified_not_remote_dispatched"
+    "artifact_gate_historical_run_mode": "contract_verified_not_remote_dispatched",
+    "producer_workflow_contract": "passed_smoke_official_lineage_confirmation_guards",
+    "producer_official_sharding": "passed_5_repetitions_x_4_case_shards_30_runs_each_max_parallel2",
+    "producer_merge": "passed_20_synthetic_shards_to_600_unique_units",
+    "producer_merge_guards": "passed_duplicate_missing_path_escape_rotation_rejected",
+    "producer_job_timeout_design": "verified_sharding_for_github_hosted_6h_job_limit",
+    "producer_live_smoke": "blocked_missing_credentials",
+    "producer_live_official": "not_run_without_live_provider_credentials",
+    "producer_history_continue": "contract_verified_not_remote_dispatched"
   }
 }

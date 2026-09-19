@@ -1,6 +1,6 @@
 # Phase 4：Benchmark 与轨迹级评测
 
-Phase 4 分十三批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus 并加入 power/MDE 规划；第六批建立 Case 来源政策、人工 gold rubric 与 balance 审计；第七批把质量控制延伸到真实 Evidence 与人工双盲评审；第八批把 source compliance、human gold 与 reviewer agreement 接入 repeated/ablation 聚合，并加入 human-gold paired significance；第九批把整次实验封装为可校验 Experiment Bundle，并支持跨 bundle regression comparison；第十批建立 Experiment Registry/History、last-known-good baseline lineage 与长期趋势 dashboard；第十一批加入 Promotion/Retention 生命周期、人工 override 与安全资产保留策略；第十二批加入 policy-as-code Release Readiness/CI Gate，统一 Registry 完整性、Promotion eligibility 与 Retention preview；第十三批把 Gate 接入 artifact-driven GitHub Actions，可复用当前 run 或指定历史 run 的 Experiment Bundle artifact。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实质量结论。
+Phase 4 分十四批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus 并加入 power/MDE 规划；第六批建立 Case 来源政策、人工 gold rubric 与 balance 审计；第七批把质量控制延伸到真实 Evidence 与人工双盲评审；第八批把 source compliance、human gold 与 reviewer agreement 接入 repeated/ablation 聚合，并加入 human-gold paired significance；第九批把整次实验封装为可校验 Experiment Bundle，并支持跨 bundle regression comparison；第十批建立 Experiment Registry/History、last-known-good baseline lineage 与长期趋势 dashboard；第十一批加入 Promotion/Retention 生命周期、人工 override 与安全资产保留策略；第十二批加入 policy-as-code Release Readiness/CI Gate，统一 Registry 完整性、Promotion eligibility 与 Retention preview；第十三批把 Gate 接入 artifact-driven GitHub Actions，可复用当前 run 或指定历史 run 的 Experiment Bundle artifact；第十四批新增真实 Benchmark Experiment Producer，将 smoke 与 official 协议分离，并用 20-shard 执行与确定性 merge 规避单 job 超时。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实质量结论。
 
 ## Benchmark Corpus
 
@@ -268,9 +268,23 @@ Gate runner 使用生产依赖 `uv sync --frozen --no-dev`，随后执行 `build
 
 远端 GitHub Actions current-run smoke 也已通过：artifact 下载校验成功，发现 7 个 manifest，Registry 为 7 valid / 0 invalid / 1 compatibility group，`b3` 输出 `passed/promote`，并成功生成 GitHub Step Summary 与 `deepscout-release-gate-audit` artifact。历史 run 下载路径已完成 workflow contract 校验，但本批未将其记为远端已调度执行。
 
+## 第十四批：Sharded Benchmark Experiment Producer
+
+`.github/workflows/benchmark-producer.yml` 是真实实验入口，只支持手动 `workflow_dispatch`。它先运行 Provider/Tavily/Graph staged preflight，并将诊断 JSON 上传为短期 artifact。模型使用 `DEEPSCOUT_MODEL` 输入；Anthropic/OpenAI/Google 与 Tavily 凭据只从 GitHub Secrets 注入，workflow 不接受明文 key 输入。
+
+`smoke` 协议固定为 1 case × 6 profiles × 1 repetition = 6 runs，不消费历史 lineage，也不会调用 Release Gate。`official` 协议固定为 20 × 6 × 5 = 600 runs：continue 模式要求数值 `history_run_id` 和确认字符串 `RUN_OFFICIAL_600`；new 模式禁止历史 run ID，并要求更强的 `RUN_OFFICIAL_600_NEW_LINEAGE`。这两个 guard 用于同时控制真实 API 成本和 baseline reset 风险。
+
+由于 GitHub-hosted job 最长运行 6 小时，official 按 `repetition=[1..5] × case_shard=[0..3]` 形成 20 个 matrix job，每片 5 cases × 6 profiles = 30 runs，`max-parallel=2`。每个 repetition 的临时 Matrix 先按目标 repetition 旋转 profile 顺序，然后 shard 内以 fixed order 执行；因此并行 case sharding 不改变原 repeated protocol 的 profile rotation 语义。
+
+`RepeatedShardMetadata` 记录目标 repetition、case shard、case IDs 与 repeated artifact 相对路径。`load_repeated_shards()` 拒绝路径逃逸；`merge_repeated_shards()` 进一步校验 canonical Corpus/Matrix identity、case 内容、bootstrap 参数、source repetitions=1、unknown profile/case、重复 shard/unit 以及全量 coverage。合并输出按 canonical case 顺序确定性重建 execution order，再复用 `build_repeated_report()` 与现有 significance pipeline。
+
+本地以 5 repetitions × 4 case shards 的完整 synthetic topology 验证：20 个 shard 成功合并为 600 个唯一 `(repetition, profile, case)` 单元；2-repetition focused test 同时验证 rotation；duplicate shard、缺失 coverage 与 repeated-path escape 均被拒绝。Producer 后半段的 Bundle/Registry 能力继续复用第九至十三批实现，不另造旁路规则。
+
+正式 continue 模式在 assemble job 中下载上一条 `deepscout-experiment-bundles` artifact，先做 Registry integrity 检查，再追加本次 candidate。组合 lineage artifact 上传后，当前 run 直接调用 reusable Release Gate；new 模式必须显式确认才允许从空 lineage 开始。真实 Provider 凭据当前仍缺失，因此本批不声称真实 smoke 或 official 结果已执行。
+
 ## 当前验证边界
 
-第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告；第六批验证 source/rubric 完整性、域名/freshness 策略与 Corpus balance guard；第七批验证 Evidence metadata、source-policy compliance、双评审 agreement 与 adjudication；第八批验证 sidecar 绑定、缺失值语义、profile/case 聚合、human-gold paired delta/significance 与报告产物；第九批验证 bundle hash/identity、tamper detection、compatibility gate、thresholded regression 与 CLI exit semantics；第十批验证多 bundle discovery、duplicate ID rejection、invalid exclusion、last-known-good lineage、history gate 与 dashboard 产物；第十一批验证 promotion policy、manual override、latest decision、stale decision rejection、retention lineage closure 与安全 apply；第十二批验证 strict/relaxed Registry integrity、accepted/regression release gate、policy-as-code、统一审计 artifact 与非破坏性 retention preview；第十三批验证 reusable workflow contract、当前/历史 run artifact 下载路径、production-only runtime、artifact round-trip 与 CI smoke orchestration。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
+第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告；第六批验证 source/rubric 完整性、域名/freshness 策略与 Corpus balance guard；第七批验证 Evidence metadata、source-policy compliance、双评审 agreement 与 adjudication；第八批验证 sidecar 绑定、缺失值语义、profile/case 聚合、human-gold paired delta/significance 与报告产物；第九批验证 bundle hash/identity、tamper detection、compatibility gate、thresholded regression 与 CLI exit semantics；第十批验证多 bundle discovery、duplicate ID rejection、invalid exclusion、last-known-good lineage、history gate 与 dashboard 产物；第十一批验证 promotion policy、manual override、latest decision、stale decision rejection、retention lineage closure 与安全 apply；第十二批验证 strict/relaxed Registry integrity、accepted/regression release gate、policy-as-code、统一审计 artifact 与非破坏性 retention preview；第十三批验证 reusable workflow contract、当前/历史 run artifact 下载路径、production-only runtime、artifact round-trip 与 CI smoke orchestration；第十四批验证 producer protocol guards、20-shard/600-unit merge、profile rotation 重建、duplicate/missing/path-escape guards 与 lineage 继承 contract。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
 
 真实 Provider + Tavily 仍因服务器缺少凭据而阻塞，因此当前只验证运行后质量聚合的 synthetic fixture，不提交伪造的真实来源合规率、人工 gold score、agreement 或显著性结论。
 
