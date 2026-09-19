@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.4.9 / Phase 4 第十批 Experiment Registry / History 与 Baseline Lineage**：保留前九批完整 Benchmark/Quality/Statistics/Bundle 基座，
-> 新增多 Bundle 历史索引、last-known-good baseline lineage、自动 history regression gate、跨 commit/model 的 long-form 趋势表与静态 dashboard。
-> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前只用 synthetic bundle history 验证 Registry/lineage，不提交伪造的真实长期趋势或回归结论。
+> 当前版本为 **v0.5.0 / Phase 4 第十一批 Promotion / Retention Lifecycle**：保留前十批完整 Benchmark/Quality/Statistics/Bundle/Registry 基座，
+> 新增实验晋级决策、人工 override 审计、正式 promoted baseline 保护、milestone/lineage-aware retention planning 与安全 apply。
+> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前只用 synthetic lifecycle history 验证 promotion/retention，不提交伪造的真实发布晋级或保留结论。
 
 ## 系统架构
 
@@ -314,13 +314,25 @@ Dashboard 输出 `registry.json / registry.md / registry_entries.csv / lineage.c
 
 第十批同时修复第九批一个未覆盖路径：自动生成 experiment ID 时现在正确使用解析后的 `resolved_sha`；Git metadata 读取失败会明确要求显式 `git_sha/git_dirty`，不会在无 Git 上下文时产生不可追溯 ID。
 
+## Phase 4 第十一批：Promotion / Retention Lifecycle
+
+Registry 的 `baseline/accepted/regression/invalid` 是自动历史 gate 状态；第十一批新增独立 `PromotionDecision`，用于表达发布/资产生命周期上的正式晋级。默认 `PromotionPolicy` 要求 bundle valid、Registry 状态为 `baseline` 或 `accepted`、Git worktree clean 且 regression_count=0。`regression` 或 dirty bundle 默认 hold；只有显式 override 才能晋级，并必须记录 actor + reason。`invalid` bundle 永远不可 override 晋级。
+
+Promotion decision 是可审计 artifact：记录 experiment/group、Registry status、eligible、action、blockers、actor、override 标记、policy snapshot 与决定时间。同一 experiment 有多次 decision 时只取最新一条；旧 compatibility key 的 decision 在 Retention 中会被拒绝，避免 Registry identity 变化后继续误保护。
+
+新增 `RetentionPolicy`：默认保留每个 compatibility group 最近 3 个 accepted、最近 2 个 regression，保护 lineage root 与所有当前 promoted bundle，invalid 默认不保留。支持显式 milestone IDs；同时默认执行 lineage closure——只要 retained bundle 引用某 baseline，就递归保护整条审计祖先链。
+
+Retention 默认只生成 `retention_plan.json/md/csv`，不会删除。`--dry-run-apply` 输出 `would_delete`；只有显式 `--apply-retention` 才真正删除。Apply 前会再次检查目标仍位于 bundles root 下、拒绝删除 bundles root 本身、要求 manifest 可解析且 experiment_id 匹配，从而避免路径漂移或误删。
+
+新增 `scripts/manage_experiment_lifecycle.py`：`promotion` 子命令生成 promotion decision；`retention` 子命令生成/模拟/应用 retention plan。Synthetic CLI 已验证：accepted `b3` 自动 promote；regression `b2` 默认 hold 并 exit 1；带 actor/reason 的 override 可 promote；Retention dry-run 只报告 `b4` would_delete，apply 后仅删除 `b4`。
+
 ## 当前验证状态
 
-Phase 4 第十批当前代码已在项目隔离环境中完成验证：
+Phase 4 第十一批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：111/111 通过（真实 Redis，无 skip；覆盖 Experiment Registry、last-known-good lineage、history gate 与历史回归）；
+- `pytest`：118/118 通过（真实 Redis，无 skip；覆盖 Promotion/Override/Retention/安全删除与历史回归）；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -336,4 +348,4 @@ Phase 4 第十批当前代码已在项目隔离环境中完成验证：
 
 **Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
-**Phase 4 后续**：真实 Provider 凭据可用后把 smoke/正式实验持续写入 Registry，让 last-known-good baseline、跨 commit/model 趋势与 CI history gate 使用真实 Bundle；真实 paired variance 继续回填 power/MDE。
+**Phase 4 后续**：真实 Provider 凭据可用后把 smoke/正式实验持续写入 Registry，并由 promotion/retention lifecycle 管理正式基线、milestone 与历史资产；真实 paired variance 继续回填 power/MDE。

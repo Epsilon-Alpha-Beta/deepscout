@@ -1,6 +1,6 @@
 # Phase 4：Benchmark 与轨迹级评测
 
-Phase 4 分十批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus 并加入 power/MDE 规划；第六批建立 Case 来源政策、人工 gold rubric 与 balance 审计；第七批把质量控制延伸到真实 Evidence 与人工双盲评审；第八批把 source compliance、human gold 与 reviewer agreement 接入 repeated/ablation 聚合，并加入 human-gold paired significance；第九批把整次实验封装为可校验 Experiment Bundle，并支持跨 bundle regression comparison；第十批建立 Experiment Registry/History、last-known-good baseline lineage 与长期趋势 dashboard。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实质量结论。
+Phase 4 分十一批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus 并加入 power/MDE 规划；第六批建立 Case 来源政策、人工 gold rubric 与 balance 审计；第七批把质量控制延伸到真实 Evidence 与人工双盲评审；第八批把 source compliance、human gold 与 reviewer agreement 接入 repeated/ablation 聚合，并加入 human-gold paired significance；第九批把整次实验封装为可校验 Experiment Bundle，并支持跨 bundle regression comparison；第十批建立 Experiment Registry/History、last-known-good baseline lineage 与长期趋势 dashboard；第十一批加入 Promotion/Retention 生命周期、人工 override 与安全资产保留策略。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实质量结论。
 
 ## Benchmark Corpus
 
@@ -226,9 +226,21 @@ CLI：`uv run python scripts/build_experiment_registry.py --bundles-root <root> 
 
 输出 `registry.json / registry.md / registry_entries.csv / lineage.csv / history_metrics.csv` 与 baseline-profile SVG 趋势图。Synthetic history smoke 已验证：b2 regression 仍以 b1 为 baseline；b3 accepted 后推进 baseline；b4 随后自动以 b3 对比，即使 Provider/Model 改变也只产生 warning。
 
+## 第十一批：Promotion / Retention Lifecycle
+
+Promotion 与 Registry gate 分层：Registry 的 accepted 表示“可作为后续自动比较的 last-known-good”，PromotionDecision 的 promote 表示“正式发布/长期保留意义上的 promoted baseline”。默认 policy 只允许 valid + baseline/accepted + clean git + zero regression 自动晋级。Regression/dirty bundle 可以显式 override，但必须记录 actor/reason；invalid bundle 不允许 override。
+
+Promotion decision 本身是审计 artifact，并保留 policy snapshot、blockers、eligible/action/override 状态。多个 decision 采用 latest-wins；Retention 会校验 decision compatibility key 与当前 Registry entry 一致，防止旧快照继续生效。
+
+Retention policy 默认保留最近 3 个 accepted、2 个 regression，保护 promoted、lineage root 与显式 milestone；默认启用 lineage closure，保证 retained candidate 所依赖的 baseline 祖先链不会被裁掉。Invalid 默认进入删除候选，但真正 apply 时仍需通过路径/manifest/experiment-id 安全校验。
+
+CLI：`uv run python scripts/manage_experiment_lifecycle.py promotion ...` 与 `... retention ...`。Retention 不带 apply 参数时只生成 plan；`--dry-run-apply` 产生 would_delete；`--apply-retention` 才真正删除。Apply 拒绝 bundles root、root 外路径、缺失/不可解析 manifest 与 experiment-id mismatch。
+
+Synthetic lifecycle smoke 已验证 accepted promotion、regression blocked gate、manual override、latest-decision-wins、stale-decision rejection、milestone/promoted/lineage protection，以及 dry-run/apply 只删除目标 bundle。
+
 ## 当前验证边界
 
-第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告；第六批验证 source/rubric 完整性、域名/freshness 策略与 Corpus balance guard；第七批验证 Evidence metadata、source-policy compliance、双评审 agreement 与 adjudication；第八批验证 sidecar 绑定、缺失值语义、profile/case 聚合、human-gold paired delta/significance 与报告产物；第九批验证 bundle hash/identity、tamper detection、compatibility gate、thresholded regression 与 CLI exit semantics；第十批验证多 bundle discovery、duplicate ID rejection、invalid exclusion、last-known-good lineage、history gate 与 dashboard 产物。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
+第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告；第六批验证 source/rubric 完整性、域名/freshness 策略与 Corpus balance guard；第七批验证 Evidence metadata、source-policy compliance、双评审 agreement 与 adjudication；第八批验证 sidecar 绑定、缺失值语义、profile/case 聚合、human-gold paired delta/significance 与报告产物；第九批验证 bundle hash/identity、tamper detection、compatibility gate、thresholded regression 与 CLI exit semantics；第十批验证多 bundle discovery、duplicate ID rejection、invalid exclusion、last-known-good lineage、history gate 与 dashboard 产物；第十一批验证 promotion policy、manual override、latest decision、stale decision rejection、retention lineage closure 与安全 apply。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
 
 真实 Provider + Tavily 仍因服务器缺少凭据而阻塞，因此当前只验证运行后质量聚合的 synthetic fixture，不提交伪造的真实来源合规率、人工 gold score、agreement 或显著性结论。
 
