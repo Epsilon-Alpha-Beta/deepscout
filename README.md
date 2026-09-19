@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.5.4 / Phase 4 第十五批 Resumable Producer / Budget & Provenance**：保留前十四批完整 Benchmark/Quality/Statistics/Bundle/Registry/Lifecycle/Release Gate/Producer 基座，
-> 新增官方实验断点恢复、不可变 Producer Plan、分片 provenance 与执行前预算护栏：兼容 shard 可跨失败/中断 run 复用，只有缺失 shard 才重新调用真实 Provider。
-> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前只验证恢复/预算/provenance 的 synthetic 管线，不把离线 fixture 当作真实实验结论。
+> 当前版本为 **v0.5.5 / Phase 4 第十六批 Dispatch Preview / Approval Lock**：保留前十五批完整 Benchmark/Quality/Statistics/Bundle/Registry/Lifecycle/Release Gate/Producer/Resume 基座，
+> 新增无 Provider Secrets 的 official Preview workflow 与不可变 approval digest：真实 Producer 必须在调用 Provider/Tavily 前重新计算并匹配 Preview 已批准的 Git/模型/lineage/resume inventory/预算计划。
+> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前只验证 approval/preview 的离线与 workflow contract，不把 synthetic 计划当作真实实验结果。
 
 ## 系统架构
 
@@ -372,13 +372,27 @@ GitHub-hosted runner 单 job 存在 6 小时执行上限，因此 official 不�
 
 Synthetic E2E 已验证典型恢复场景：旧 run 保留 17/20 个兼容 shard，本次仅允许 3 个新 shard，则得到 510 个复用 run units + 90 个新 run units；对应新执行上界为 3,180 searches / 15,750,000 Research Worker tokens。20 个 provenance 全部校验后仍确定性合并为完整 600-run repeated experiment。模型/Git/Corpus/Matrix/lineage 指纹漂移、预算超限、artifact 分页截断/过期、finalized resume source 和 provenance 篡改都会被拒绝。
 
+## Phase 4 第十六批：Dispatch Preview 与 Approval Lock
+
+新增 `.github/workflows/benchmark-producer-preview.yml`，作为 official Producer 的无成本规划入口。Preview 只使用 `contents: read / actions: read` 和当前仓库代码，不读取 Anthropic/OpenAI/Google/Tavily Secrets，也不会执行任何 Provider/Tavily/Graph live call。它会验证 `history_run_id`、可选 `resume_run_id`、历史 lineage artifact、resume artifact inventory 与三层预算，然后生成 `current-plan.json`、`resume-plan.json` 和 `dispatch-approval.json`。
+
+`ProducerDispatchApproval` 将 Producer compatibility fingerprint、resume source、三层新执行预算、reused/new shard 数、new run units 与 20 个 shard 的 reuse/execute 决策一起哈希为 64 位 `approval_digest`。workflow run ID、attempt 与 experiment ID 不进入 compatibility fingerprint，因此 Preview 和后续真实 Producer 虽然属于不同 Actions run，只要实验定义和恢复/预算计划完全相同，就会得到相同 digest；任一 Git SHA、模型、Corpus/Matrix、lineage、resume inventory 或预算变化都会使 digest 改变。
+
+正式 `benchmark-producer.yml` 的 official 协议现在强制要求 Preview 生成的 `approval_digest`。preflight 在任何真实 Provider/Tavily 调用前重新读取 history/resume artifact inventory、重建 Resume Plan，并通过 `validate_dispatch_approval()` 校验 digest；不匹配时 CLI 明确 exit 2，且不会生成通过的 approval artifact。`smoke` 协议不消费 approval digest，继续保持低成本独立路径。
+
+第十六批同时提前验证 `history_run_id`：continue 模式会在 live preflight 前确认对应 run 仍有未过期的 `deepscout-experiment-bundles`，避免 600-run 实验完成后才发现历史 baseline artifact 不存在。GitHub artifact API 若分页截断或 lineage artifact 已过期，也会沿用第十五批 inventory guard 直接阻断。
+
+Secrets 作用域进一步收紧：Producer preflight job 的 planning/history/resume/approval 步骤只有 `DEEPSCOUT_MODEL`，Provider/Tavily Secrets 仅注入真正执行 `Run live Provider/Tavily preflight` 的单个 step。Preview workflow 中不存在任何 `secrets.*` 引用。
+
+本地 CLI E2E 已验证 Preview run 与 actual Producer run 在不同 run identity 下仍得到相同 approval digest；17 reused + 3 new shard 的计划对应 90 个新 run units、3,180 search-call 上界与 15,750,000 Research Worker token 上界。故意传入错误 digest 时返回 exit 2。focused Producer tests 21/21 通过，全量测试 143/143 通过。
+
 ## 当前验证状态
 
-Phase 4 第十五批当前代码已在项目隔离环境中完成验证：
+Phase 4 第十六批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：138/138 通过（真实 Redis，无 skip；新增覆盖 Producer Plan/Resume、三层预算、单 shard validation 与 provenance closure）；
+- `pytest`：143/143 通过（真实 Redis，无 skip；新增覆盖 Dispatch Approval digest、history lineage inventory 与 Preview/actual 跨 run 稳定性）；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -389,10 +403,10 @@ Phase 4 第十五批当前代码已在项目隔离环境中完成验证：
 - Live Provider：当前因缺少 Provider/Tavily 凭据而阻塞；
 - Live E2E 诊断：已拆分为 Provider Probe → Tavily Probe → Full Graph 三阶段，并支持 JSON 结果输出与阶段级故障定位；
 - GitHub Actions：CI 在每次 push/PR 后执行 Install、Ruff、Tests，并通过 Actions artifact 运行 Release Gate smoke；远端已验证 7 Bundle 下载、Registry rebuild、`b3 passed/promote` 与 audit artifact 上传链路。
-- Experiment Producer：20-shard/600-run 基础生产链路继续通过；第十五批新增不可变 Plan 指纹、失败 run shard 复用、三层预算 guard 与 provenance 审计，synthetic 17 reused + 3 executed → 600-run merge 已通过；真实 smoke/official 仍等待 Provider/Tavily 凭据后手动触发。
+- Experiment Producer：20-shard/600-run、resume/provenance 基础继续通过；第十六批新增零 Secrets Preview、history artifact 前置校验与 approval digest lock，真实 official 必须先 Preview 再执行；真实 smoke/official 仍等待 Provider/Tavily 凭据。
 
 ## 后续路线
 
 **Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
-**Phase 4 后续**：真实 Provider/Tavily 凭据可用后，先运行 `smoke` producer；首条 official lineage 显式使用 `new`。若 official run 中断，可将该失败 run 作为 `resume_run_id` 并设置 `max_new_shards/search_calls/research_tokens` 预算，仅重跑缺失 shard；成功完成后再用其 run ID 作为后续 `history_run_id` 延续 lineage，并用真实 paired variance 回填 power/MDE。
+**Phase 4 后续**：真实 Provider/Tavily 凭据可用后，先运行 `smoke` producer；official 必须先运行 Producer Preview，确认 Git/模型/lineage/resume shard/预算并取得 approval digest，再把该 digest 交给真实 Producer。若 official 中断，重新 Preview 失败 run 的 shard inventory 后生成新的 approval，只重跑缺失 shard；成功后用其 run ID 延续 history lineage。

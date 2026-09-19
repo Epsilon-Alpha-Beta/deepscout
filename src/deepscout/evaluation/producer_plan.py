@@ -100,6 +100,22 @@ class ProducerResumePlan(BaseModel):
     shards: list[ProducerShardPlan]
 
 
+class ProducerDispatchApproval(BaseModel):
+    schema_version: int = 1
+    producer_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    resume_run_id: str | None = None
+    max_new_shards: int = Field(ge=0)
+    max_new_search_calls: int | None = Field(default=None, ge=0)
+    max_new_research_tokens: int | None = Field(default=None, ge=0)
+    reused_shards: int = Field(ge=0)
+    new_shards: int = Field(ge=0)
+    new_run_units: int = Field(ge=0)
+    new_search_call_upper_bound: int = Field(ge=0)
+    new_research_token_upper_bound: int = Field(ge=0)
+    shard_decisions: list[ProducerShardPlan]
+    approval_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 def _fingerprint(payload: dict[str, object]) -> str:
     encoded = json.dumps(
         payload,
@@ -342,6 +358,82 @@ def plan_producer_resume(
         blockers=blockers,
         shards=shards,
     )
+
+
+def _dispatch_approval_payload(
+    current: ProducerPlan,
+    resume: ProducerResumePlan,
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "producer_fingerprint": current.compatibility_fingerprint,
+        "resume_run_id": resume.resume_run_id,
+        "max_new_shards": resume.max_new_shards,
+        "max_new_search_calls": resume.max_new_search_calls,
+        "max_new_research_tokens": resume.max_new_research_tokens,
+        "reused_shards": resume.reused_shards,
+        "new_shards": resume.new_shards,
+        "new_run_units": resume.new_run_units,
+        "new_search_call_upper_bound": resume.new_search_call_upper_bound,
+        "new_research_token_upper_bound": resume.new_research_token_upper_bound,
+        "shard_decisions": [
+            shard.model_dump(mode="json")
+            for shard in sorted(
+                resume.shards,
+                key=lambda item: (item.repetition, item.case_shard),
+            )
+        ],
+    }
+
+
+def build_dispatch_approval(
+    current: ProducerPlan,
+    resume: ProducerResumePlan,
+) -> ProducerDispatchApproval:
+    validate_producer_plan_integrity(current)
+    if current.protocol != "official":
+        raise ValueError("dispatch approval 仅适用于 official protocol。")
+    if not resume.passed:
+        raise ValueError("resume plan 未通过，不能生成 dispatch approval。")
+    if resume.current_fingerprint != current.compatibility_fingerprint:
+        raise ValueError("resume plan 与 producer plan fingerprint 不一致。")
+    payload = _dispatch_approval_payload(current, resume)
+    return ProducerDispatchApproval(
+        producer_fingerprint=current.compatibility_fingerprint,
+        resume_run_id=resume.resume_run_id,
+        max_new_shards=resume.max_new_shards,
+        max_new_search_calls=resume.max_new_search_calls,
+        max_new_research_tokens=resume.max_new_research_tokens,
+        reused_shards=resume.reused_shards,
+        new_shards=resume.new_shards,
+        new_run_units=resume.new_run_units,
+        new_search_call_upper_bound=resume.new_search_call_upper_bound,
+        new_research_token_upper_bound=resume.new_research_token_upper_bound,
+        shard_decisions=resume.shards,
+        approval_digest=_fingerprint(payload),
+    )
+
+
+def validate_dispatch_approval(
+    current: ProducerPlan,
+    resume: ProducerResumePlan,
+    *,
+    expected_digest: str,
+) -> ProducerDispatchApproval:
+    approval = build_dispatch_approval(current, resume)
+    if approval.approval_digest != expected_digest:
+        raise ValueError(
+            "dispatch approval digest mismatch: "
+            f"expected={expected_digest} actual={approval.approval_digest}"
+        )
+    return approval
+
+
+def validate_history_artifact_inventory(payload: dict[str, object]) -> set[str]:
+    names = artifact_names_from_api_response(payload)
+    if "deepscout-experiment-bundles" not in names:
+        raise ValueError("history run 缺少可用 deepscout-experiment-bundles artifact。")
+    return names
 
 
 def shard_resume_decision(

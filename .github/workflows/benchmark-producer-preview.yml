@@ -1,0 +1,221 @@
+name: Benchmark Producer Preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "LangChain model identifier for the planned official experiment."
+        required: true
+        type: string
+        default: anthropic:claude-sonnet-4-6
+      lineage_mode:
+        description: "continue reuses an existing lineage; new starts a fresh lineage."
+        required: true
+        type: choice
+        options:
+          - continue
+          - new
+        default: continue
+      history_run_id:
+        description: "continue only: finalized producer run containing deepscout-experiment-bundles."
+        required: false
+        type: string
+        default: ""
+      resume_run_id:
+        description: "optional failed/interrupted producer run whose compatible shards may be reused."
+        required: false
+        type: string
+        default: ""
+      max_new_shards:
+        description: "maximum newly executed shards (0-20)."
+        required: true
+        type: number
+        default: 20
+
+      max_new_search_calls:
+        description: "upper bound for searches across newly executed shards."
+        required: true
+        type: number
+        default: 21200
+      max_new_research_tokens:
+        description: "upper bound for Research Worker tokens across newly executed shards."
+        required: true
+        type: number
+        default: 105000000
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    env:
+      DEEPSCOUT_MODEL: ${{ inputs.model }}
+      DEEPSCOUT_LINEAGE_MODE: ${{ inputs.lineage_mode }}
+      DEEPSCOUT_HISTORY_RUN_ID: ${{ inputs.history_run_id }}
+      DEEPSCOUT_RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+      DEEPSCOUT_MAX_NEW_SHARDS: ${{ inputs.max_new_shards }}
+      DEEPSCOUT_MAX_NEW_SEARCH_CALLS: ${{ inputs.max_new_search_calls }}
+      DEEPSCOUT_MAX_NEW_RESEARCH_TOKENS: ${{ inputs.max_new_research_tokens }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.11"
+          version: "latest-known"
+
+      - name: Install planning runtime
+        run: uv sync --frozen --no-dev
+
+      - name: Validate preview inputs
+        run: |
+          if [[ ! "$DEEPSCOUT_MAX_NEW_SHARDS" =~ ^([0-9]|1[0-9]|20)$ ]]; then
+            echo "max_new_shards must be an integer in [0,20]" >&2
+            exit 2
+          fi
+          if [[ ! "$DEEPSCOUT_MAX_NEW_SEARCH_CALLS" =~ ^[0-9]+$ ]]; then
+            echo "max_new_search_calls must be a non-negative integer" >&2
+            exit 2
+          fi
+          if [[ ! "$DEEPSCOUT_MAX_NEW_RESEARCH_TOKENS" =~ ^[0-9]+$ ]]; then
+            echo "max_new_research_tokens must be a non-negative integer" >&2
+            exit 2
+          fi
+          if [[ -n "$DEEPSCOUT_RESUME_RUN_ID" && ! "$DEEPSCOUT_RESUME_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "resume_run_id must be numeric" >&2
+            exit 2
+          fi
+
+          if [[ "$DEEPSCOUT_LINEAGE_MODE" == "continue" ]]; then
+            if [[ ! "$DEEPSCOUT_HISTORY_RUN_ID" =~ ^[0-9]+$ ]]; then
+              echo "continue requires numeric history_run_id" >&2
+              exit 2
+            fi
+          elif [[ -n "$DEEPSCOUT_HISTORY_RUN_ID" ]]; then
+            echo "new lineage must not specify history_run_id" >&2
+            exit 2
+          fi
+
+      - name: Prepare preview directories
+        run: mkdir -p benchmark-results/producer-preview/plan benchmark-results/producer-preview/resume-source
+
+      - name: Create preview producer plan
+        run: >
+          uv run python scripts/plan_benchmark_producer.py create
+          --protocol official
+          --model "$DEEPSCOUT_MODEL"
+          --git-sha "$GITHUB_SHA"
+          --lineage-mode "$DEEPSCOUT_LINEAGE_MODE"
+          --history-run-id "$DEEPSCOUT_HISTORY_RUN_ID"
+          --experiment-id "preview-gh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          --workflow-run-id "$GITHUB_RUN_ID"
+          --workflow-run-attempt "$GITHUB_RUN_ATTEMPT"
+          --max-parallel 2
+          --output benchmark-results/producer-preview/plan/current-plan.json
+
+      - name: Read and validate history lineage inventory
+        if: ${{ inputs.lineage_mode == 'continue' }}
+        env:
+          DEEPSCOUT_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error --location \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $DEEPSCOUT_GITHUB_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$DEEPSCOUT_HISTORY_RUN_ID/artifacts?per_page=100" \
+            --output benchmark-results/producer-preview/plan/history-artifacts.json
+          uv run python scripts/plan_benchmark_producer.py inventory \
+            --artifacts-api-json benchmark-results/producer-preview/plan/history-artifacts.json \
+            --require-history-lineage
+
+      - name: Restore resume source producer plan
+        if: ${{ inputs.resume_run_id != '' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: deepscout-producer-plan
+          path: benchmark-results/producer-preview/resume-source
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.resume_run_id }}
+
+      - name: Read resume source artifact inventory
+        if: ${{ inputs.resume_run_id != '' }}
+        env:
+          DEEPSCOUT_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error --location \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $DEEPSCOUT_GITHUB_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$DEEPSCOUT_RESUME_RUN_ID/artifacts?per_page=100" \
+            --output benchmark-results/producer-preview/plan/resume-artifacts.json
+
+      - name: Build resume and budget plan
+        run: |
+          args=(
+            resume
+            --current-plan benchmark-results/producer-preview/plan/current-plan.json
+            --max-new-shards "$DEEPSCOUT_MAX_NEW_SHARDS"
+            --max-new-search-calls "$DEEPSCOUT_MAX_NEW_SEARCH_CALLS"
+            --max-new-research-tokens "$DEEPSCOUT_MAX_NEW_RESEARCH_TOKENS"
+            --output benchmark-results/producer-preview/plan/resume-plan.json
+          )
+          if [[ -n "$DEEPSCOUT_RESUME_RUN_ID" ]]; then
+            args+=(
+              --previous-plan benchmark-results/producer-preview/resume-source/current-plan.json
+              --artifacts-api-json benchmark-results/producer-preview/plan/resume-artifacts.json
+              --resume-run-id "$DEEPSCOUT_RESUME_RUN_ID"
+            )
+          fi
+          uv run python scripts/plan_benchmark_producer.py "${args[@]}"
+
+      - name: Create dispatch approval
+        id: approval
+        run: >
+          uv run python scripts/plan_benchmark_producer.py approval
+          --current-plan benchmark-results/producer-preview/plan/current-plan.json
+          --resume-plan benchmark-results/producer-preview/plan/resume-plan.json
+          --output benchmark-results/producer-preview/plan/dispatch-approval.json
+          --github-output "$GITHUB_OUTPUT"
+
+      - name: Publish preview summary
+        env:
+          DEEPSCOUT_APPROVAL_DIGEST: ${{ steps.approval.outputs.approval_digest }}
+        run: |
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          plan = json.loads(Path("benchmark-results/producer-preview/plan/current-plan.json").read_text())
+          resume = json.loads(Path("benchmark-results/producer-preview/plan/resume-plan.json").read_text())
+          approval = json.loads(
+              Path("benchmark-results/producer-preview/plan/dispatch-approval.json").read_text()
+          )
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as handle:
+              handle.write("## Benchmark Producer Preview\n\n")
+              handle.write(f"- git SHA: `{plan['git_sha']}`\n")
+              handle.write(f"- model: `{plan['model']}`\n")
+              handle.write(f"- lineage mode: `{plan['lineage_mode']}`\n")
+              handle.write(f"- history run: `{plan['history_run_id'] or 'none'}`\n")
+              handle.write(f"- resume run: `{resume['resume_run_id'] or 'none'}`\n")
+              handle.write(f"- reused shards: **{resume['reused_shards']}**\n")
+              handle.write(f"- new shards: **{resume['new_shards']}**\n")
+              handle.write(f"- new run units: **{resume['new_run_units']}**\n")
+              handle.write(
+                  f"- new search-call upper bound: **{resume['new_search_call_upper_bound']}**\n"
+              )
+              handle.write(
+                  "- new Research Worker token upper bound: "
+                  f"**{resume['new_research_token_upper_bound']}**\n"
+              )
+              handle.write(f"- approval digest: `{approval['approval_digest']}`\n")
+          PY
+
+      - name: Upload dispatch approval
+        uses: actions/upload-artifact@v7
+        with:
+          name: deepscout-producer-approval
+          path: benchmark-results/producer-preview/plan
+          if-no-files-found: error
+          retention-days: 14

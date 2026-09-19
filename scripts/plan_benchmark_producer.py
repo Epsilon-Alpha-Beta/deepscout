@@ -10,9 +10,12 @@ from deepscout.evaluation.producer_plan import (
     ProducerPlan,
     ProducerResumePlan,
     artifact_names_from_api_response,
+    build_dispatch_approval,
     build_producer_plan,
     plan_producer_resume,
     shard_resume_decision,
+    validate_dispatch_approval,
+    validate_history_artifact_inventory,
     validate_shard_provenance_set,
 )
 
@@ -80,6 +83,51 @@ def _resume(args: argparse.Namespace) -> int:
     for blocker in resume.blockers:
         print(f"blocker={blocker}")
     return 0 if resume.passed else 2
+
+
+def _approval(args: argparse.Namespace) -> int:
+    current = _load_plan(args.current_plan)
+    resume = ProducerResumePlan.model_validate_json(args.resume_plan.read_text(encoding="utf-8"))
+    try:
+        if args.expected_digest:
+            approval = validate_dispatch_approval(
+                current,
+                resume,
+                expected_digest=args.expected_digest,
+            )
+        else:
+            approval = build_dispatch_approval(current, resume)
+    except ValueError as exc:
+        print(f"error={exc}")
+        return 2
+    _write_model(args.output, approval)
+    print(
+        f"approval_digest={approval.approval_digest} "
+        f"reused_shards={approval.reused_shards} new_shards={approval.new_shards} "
+        f"new_runs={approval.new_run_units} "
+        f"new_search_upper={approval.new_search_call_upper_bound} "
+        f"new_research_token_upper={approval.new_research_token_upper_bound}"
+    )
+    if args.github_output:
+        with args.github_output.open("a", encoding="utf-8") as handle:
+            handle.write(f"approval_digest={approval.approval_digest}\n")
+    return 0
+
+
+def _inventory(args: argparse.Namespace) -> int:
+    payload = json.loads(args.artifacts_api_json.read_text(encoding="utf-8"))
+    try:
+        if args.require_history_lineage:
+            names = validate_history_artifact_inventory(payload)
+        else:
+            names = artifact_names_from_api_response(payload)
+    except ValueError as exc:
+        print(f"error={exc}")
+        return 2
+    print(f"artifacts={len(names)}")
+    for name in sorted(names):
+        print(f"artifact={name}")
+    return 0
 
 
 def _shard(args: argparse.Namespace) -> int:
@@ -150,6 +198,19 @@ def _parser() -> argparse.ArgumentParser:
     resume.add_argument("--max-new-research-tokens", type=int, default=None)
     resume.add_argument("--output", type=Path, required=True)
     resume.set_defaults(handler=_resume)
+
+    approval = sub.add_parser("approval")
+    approval.add_argument("--current-plan", type=Path, required=True)
+    approval.add_argument("--resume-plan", type=Path, required=True)
+    approval.add_argument("--expected-digest", default="")
+    approval.add_argument("--output", type=Path, required=True)
+    approval.add_argument("--github-output", type=Path, default=None)
+    approval.set_defaults(handler=_approval)
+
+    inventory = sub.add_parser("inventory")
+    inventory.add_argument("--artifacts-api-json", type=Path, required=True)
+    inventory.add_argument("--require-history-lineage", action="store_true")
+    inventory.set_defaults(handler=_inventory)
 
     shard = sub.add_parser("shard")
     shard.add_argument("--resume-plan", type=Path, required=True)

@@ -4,10 +4,13 @@ import pytest
 
 from deepscout.evaluation.producer_plan import (
     artifact_names_from_api_response,
+    build_dispatch_approval,
     build_producer_plan,
     expected_official_shards,
     plan_producer_resume,
     shard_resume_decision,
+    validate_dispatch_approval,
+    validate_history_artifact_inventory,
     validate_shard_provenance_set,
 )
 
@@ -257,3 +260,133 @@ def test_resume_rejects_finalized_source_run_and_ignores_expired_artifacts():
     )
     assert resume.passed is False
     assert any("finalized experiment lineage" in blocker for blocker in resume.blockers)
+
+
+def test_dispatch_approval_binds_resume_inventory_and_budgets():
+    current = _plan(experiment_id="current", workflow_run_id="200")
+    previous = _plan(experiment_id="previous", workflow_run_id="100")
+    names = [name for _, _, name in expected_official_shards(current)]
+    resume = plan_producer_resume(
+        current,
+        previous=previous,
+        available_artifacts=set(names[:17]),
+        resume_run_id="100",
+        max_new_shards=3,
+        max_new_search_calls=3180,
+        max_new_research_tokens=15_750_000,
+    )
+    approval = build_dispatch_approval(current, resume)
+    assert len(approval.approval_digest) == 64
+    assert approval.reused_shards == 17
+    assert approval.new_shards == 3
+
+    validated = validate_dispatch_approval(
+        current,
+        resume,
+        expected_digest=approval.approval_digest,
+    )
+    assert validated == approval
+
+    changed_budget = plan_producer_resume(
+        current,
+        previous=previous,
+        available_artifacts=set(names[:17]),
+        resume_run_id="100",
+        max_new_shards=4,
+        max_new_search_calls=4240,
+        max_new_research_tokens=21_000_000,
+    )
+    changed = build_dispatch_approval(current, changed_budget)
+    assert changed.approval_digest != approval.approval_digest
+
+
+def test_dispatch_approval_changes_when_reusable_shard_inventory_changes():
+    current = _plan(experiment_id="current", workflow_run_id="200")
+    previous = _plan(experiment_id="previous", workflow_run_id="100")
+    names = [name for _, _, name in expected_official_shards(current)]
+
+    first = plan_producer_resume(
+        current,
+        previous=previous,
+        available_artifacts=set(names[:17]),
+        resume_run_id="100",
+        max_new_shards=4,
+    )
+    second = plan_producer_resume(
+        current,
+        previous=previous,
+        available_artifacts=set(names[:16]),
+        resume_run_id="100",
+        max_new_shards=4,
+    )
+    first_approval = build_dispatch_approval(current, first)
+    second_approval = build_dispatch_approval(current, second)
+    assert first_approval.approval_digest != second_approval.approval_digest
+
+
+def test_dispatch_approval_rejects_digest_mismatch():
+    current = _plan()
+    resume = plan_producer_resume(
+        current,
+        previous=None,
+        available_artifacts=None,
+        resume_run_id=None,
+        max_new_shards=20,
+    )
+    with pytest.raises(ValueError, match="approval digest mismatch"):
+        validate_dispatch_approval(current, resume, expected_digest="0" * 64)
+
+
+def test_history_artifact_inventory_requires_live_lineage_artifact():
+    payload = {
+        "total_count": 2,
+        "artifacts": [
+            {"name": "deepscout-experiment-bundles", "expired": False},
+            {"name": "other", "expired": True},
+        ],
+    }
+    names = validate_history_artifact_inventory(payload)
+    assert names == {"deepscout-experiment-bundles"}
+
+    with pytest.raises(ValueError, match="缺少可用"):
+        validate_history_artifact_inventory(
+            {
+                "total_count": 1,
+                "artifacts": [
+                    {"name": "deepscout-experiment-bundles", "expired": True},
+                ],
+            }
+        )
+
+
+def test_dispatch_approval_is_stable_across_preview_and_actual_run_identity():
+    preview = _plan(experiment_id="preview-gh-10-1", workflow_run_id="10")
+    actual = _plan(experiment_id="exp-gh-20-1", workflow_run_id="20")
+    previous = _plan(experiment_id="previous", workflow_run_id="100")
+    names = [name for _, _, name in expected_official_shards(preview)]
+    available = set(names[:18])
+
+    preview_resume = plan_producer_resume(
+        preview,
+        previous=previous,
+        available_artifacts=available,
+        resume_run_id="100",
+        max_new_shards=2,
+        max_new_search_calls=2120,
+        max_new_research_tokens=10_500_000,
+    )
+    actual_resume = plan_producer_resume(
+        actual,
+        previous=previous,
+        available_artifacts=available,
+        resume_run_id="100",
+        max_new_shards=2,
+        max_new_search_calls=2120,
+        max_new_research_tokens=10_500_000,
+    )
+
+    assert preview.compatibility_fingerprint == actual.compatibility_fingerprint
+    assert (
+        build_dispatch_approval(preview, preview_resume).approval_digest
+        == build_dispatch_approval(actual, actual_resume).approval_digest
+    )

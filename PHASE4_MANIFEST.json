@@ -1,7 +1,7 @@
 {
   "project": "DeepScout",
-  "version": "0.5.4",
-  "phase": "Phase 4 - batch 15",
+  "version": "0.5.5",
+  "phase": "Phase 4 - batch 16",
   "validation": {
     "benchmark_corpus": "passed_20_cases_16_categories_v1.3.0",
     "promotion_policy": "passed_valid_status_clean_git_zero_regression_defaults",
@@ -22,9 +22,9 @@
     "ablation_matrix": "passed_6_profiles_120_planned_runs",
     "repeated_experiment_protocol": "passed_600_planned_default_runs",
     "current_mde_dz": "0.7642_at_alpha0.05_family5_power0.8",
-    "pytest_with_redis": "138 passed",
+    "pytest_with_redis": "143 passed",
     "ruff": "passed",
-    "project_version": "0.5.4",
+    "project_version": "0.5.5",
     "container_experiment_lifecycle_validate": "passed_v0.5.0_nonroot_promotion_override_dryrun_apply_exact_delete_api_healthcheck",
     "live_provider_benchmark": "blocked_missing_credentials",
     "real_promotion_decision": "not_run_without_live_provider_bundles",
@@ -61,6 +61,13 @@
     "producer_resume_artifact_inventory": "passed_expired_ignored_pagination_truncation_rejected",
     "producer_resume_live": "not_run_without_live_provider_credentials",
     "producer_resume_workflow_contract": "passed_budget_before_live_preflight_reuse_or_execute_canonical_validate",
-    "producer_resume_remote": "not_dispatched_without_live_provider_credentials"
+    "producer_resume_remote": "not_dispatched_without_live_provider_credentials",
+    "producer_preview_workflow": "passed_zero_provider_secrets_actions_read_only_planning_contract",
+    "producer_dispatch_approval": "passed_git_model_lineage_resume_inventory_budget_shard_decisions_digest_lock",
+    "producer_dispatch_cross_run": "passed_preview_actual_dynamic_run_identity_same_digest",
+    "producer_dispatch_mismatch": "passed_wrong_digest_exit2_before_live_preflight",
+    "producer_history_preflight": "passed_history_lineage_artifact_required_before_provider_call",
+    "producer_secret_scope": "passed_preview_zero_secrets_preflight_keys_live_step_only",
+    "producer_preview_live": "planning_only_no_provider_call"
   }
 }

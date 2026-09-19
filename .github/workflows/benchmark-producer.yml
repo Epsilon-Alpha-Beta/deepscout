@@ -49,6 +49,11 @@ on:
         required: true
         type: number
         default: 105000000
+      approval_digest:
+        description: "official only: sha256 digest produced by Benchmark Producer Preview."
+        required: false
+        type: string
+        default: ""
       confirmation:
         description: "official requires RUN_OFFICIAL_600; new lineage requires RUN_OFFICIAL_600_NEW_LINEAGE."
         required: false
@@ -72,10 +77,6 @@ jobs:
       new_research_token_upper_bound: ${{ steps.resume-plan.outputs.new_research_token_upper_bound }}
     env:
       DEEPSCOUT_MODEL: ${{ inputs.model }}
-      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
     steps:
       - uses: actions/checkout@v7
 
@@ -96,6 +97,7 @@ jobs:
           DEEPSCOUT_MAX_NEW_SHARDS: ${{ inputs.max_new_shards }}
           DEEPSCOUT_MAX_NEW_SEARCH_CALLS: ${{ inputs.max_new_search_calls }}
           DEEPSCOUT_MAX_NEW_RESEARCH_TOKENS: ${{ inputs.max_new_research_tokens }}
+          DEEPSCOUT_APPROVAL_DIGEST: ${{ inputs.approval_digest }}
           DEEPSCOUT_CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           if [[ ! "$DEEPSCOUT_MAX_NEW_SHARDS" =~ ^([0-9]|1[0-9]|20)$ ]]; then
@@ -115,7 +117,15 @@ jobs:
               echo "smoke protocol does not consume history_run_id/resume_run_id" >&2
               exit 2
             fi
+            if [[ -n "$DEEPSCOUT_APPROVAL_DIGEST" ]]; then
+              echo "smoke protocol does not consume approval_digest" >&2
+              exit 2
+            fi
             exit 0
+          fi
+          if [[ ! "$DEEPSCOUT_APPROVAL_DIGEST" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "official requires a 64-hex approval_digest from Benchmark Producer Preview" >&2
+            exit 2
           fi
           if [[ -n "$DEEPSCOUT_RESUME_RUN_ID" && ! "$DEEPSCOUT_RESUME_RUN_ID" =~ ^[0-9]+$ ]]; then
             echo "official resume_run_id must be numeric" >&2
@@ -187,6 +197,21 @@ jobs:
           --max-parallel 2
           --output benchmark-results/producer/plan/current-plan.json
 
+      - name: Read history run artifact inventory
+        if: ${{ inputs.protocol == 'official' && inputs.lineage_mode == 'continue' }}
+        env:
+          DEEPSCOUT_HISTORY_RUN_ID: ${{ inputs.history_run_id }}
+          DEEPSCOUT_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error --location \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $DEEPSCOUT_GITHUB_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$DEEPSCOUT_HISTORY_RUN_ID/artifacts?per_page=100" \
+            --output benchmark-results/producer/plan/history-artifacts.json
+          uv run python scripts/plan_benchmark_producer.py inventory \
+            --artifacts-api-json benchmark-results/producer/plan/history-artifacts.json \
+            --require-history-lineage
+
       - name: Restore prior producer plan
         if: ${{ inputs.protocol == 'official' && inputs.resume_run_id != '' }}
         uses: actions/download-artifact@v8
@@ -252,6 +277,17 @@ jobs:
                   handle.write(f"{key}={data[key]}\n")
           PY
 
+      - name: Verify approved dispatch plan
+        if: ${{ inputs.protocol == 'official' }}
+        env:
+          DEEPSCOUT_APPROVAL_DIGEST: ${{ inputs.approval_digest }}
+        run: >
+          uv run python scripts/plan_benchmark_producer.py approval
+          --current-plan benchmark-results/producer/plan/current-plan.json
+          --resume-plan benchmark-results/producer/plan/resume-plan.json
+          --expected-digest "$DEEPSCOUT_APPROVAL_DIGEST"
+          --output benchmark-results/producer/plan/dispatch-approval.json
+
       - name: Upload producer plan
         uses: actions/upload-artifact@v7
         with:
@@ -261,6 +297,11 @@ jobs:
           retention-days: 90
 
       - name: Run live Provider/Tavily preflight
+        env:
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: >
           uv run python scripts/check_live_e2e.py
           --probe-timeout 30
@@ -292,6 +333,7 @@ jobs:
             echo "- new run units: ${{ steps.resume-plan.outputs.new_run_units }}" >> "$GITHUB_STEP_SUMMARY"
             echo "- new search-call upper bound: ${{ steps.resume-plan.outputs.new_search_call_upper_bound }}" >> "$GITHUB_STEP_SUMMARY"
             echo "- new Research Worker token upper bound: ${{ steps.resume-plan.outputs.new_research_token_upper_bound }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- approval digest: ${{ inputs.approval_digest }}" >> "$GITHUB_STEP_SUMMARY"
           fi
 
   smoke:
