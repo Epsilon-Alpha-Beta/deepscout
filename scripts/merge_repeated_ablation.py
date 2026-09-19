@@ -6,7 +6,11 @@ import argparse
 from pathlib import Path
 
 from deepscout.evaluation.ablation import load_ablation_matrix
-from deepscout.evaluation.repeated_merge import load_repeated_shards, merge_repeated_shards
+from deepscout.evaluation.repeated_merge import (
+    load_repeated_shards,
+    merge_repeated_shards,
+    validate_repeated_shard,
+)
 from deepscout.evaluation.repeated_report import save_repeated_report
 from deepscout.evaluation.runner import load_corpus
 from deepscout.evaluation.significance import build_significance_report
@@ -24,12 +28,36 @@ def main() -> int:
     parser.add_argument("--exact-permutation-max-pairs", type=int, default=16)
     parser.add_argument("--permutation-resamples", type=int, default=20000)
     parser.add_argument("--permutation-seed", type=int, default=20260915)
-    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument("--validate-shard", action="store_true")
+    parser.add_argument("--target-repetition", type=int, default=None)
+    parser.add_argument("--target-case-shard", type=int, default=None)
     args = parser.parse_args()
 
     corpus = load_corpus(args.corpus)
     matrix = load_ablation_matrix(args.matrix)
     shards = load_repeated_shards(args.shards_root)
+    if args.validate_shard:
+        if args.target_repetition is None or args.target_case_shard is None:
+            parser.error("--validate-shard 需要 --target-repetition 与 --target-case-shard。")
+        if len(shards) != 1:
+            raise ValueError(f"单 shard 校验要求恰好 1 个 shard，实际 {len(shards)}。")
+        validate_repeated_shard(
+            corpus,
+            matrix,
+            shards[0],
+            target_repetition=args.target_repetition,
+            target_case_shard=args.target_case_shard,
+            order_strategy=args.order_strategy,
+        )
+        print(
+            f"valid=true repetition={args.target_repetition} "
+            f"case_shard={args.target_case_shard} runs={len(shards[0].report.runs)}"
+        )
+        return 0
+
+    if args.output_dir is None:
+        parser.error("合并模式需要 --output-dir。")
     report = merge_repeated_shards(
         corpus,
         matrix,

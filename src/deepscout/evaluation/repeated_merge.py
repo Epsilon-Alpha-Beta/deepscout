@@ -247,3 +247,70 @@ def merge_repeated_shards(
         confidence_level=confidence_level,
         bootstrap_seed=bootstrap_seed,
     )
+
+
+def validate_repeated_shard(
+    corpus: BenchmarkCorpus,
+    matrix: AblationMatrix,
+    shard: LoadedRepeatedShard,
+    *,
+    target_repetition: int,
+    target_case_shard: int,
+    cases_per_shard: int = 5,
+    order_strategy: OrderStrategy = "rotate",
+) -> None:
+    """严格校验一个 official producer shard 的坐标、内容与执行顺序。"""
+
+    meta = shard.metadata
+    report = shard.report
+    if meta.repetition != target_repetition or meta.case_shard != target_case_shard:
+        raise ValueError(
+            "shard coordinate mismatch: "
+            f"expected=({target_repetition},{target_case_shard}) "
+            f"actual=({meta.repetition},{meta.case_shard})"
+        )
+    if report.repetitions != 1 or report.order_strategy != "fixed":
+        raise ValueError("official shard 必须使用 repetitions=1 且 order_strategy=fixed。")
+    if _report_identity(report) != _canonical_identity(corpus, matrix):
+        raise ValueError("official shard identity 与 canonical corpus/matrix 不一致。")
+
+    start = target_case_shard * cases_per_shard
+    expected_cases = corpus.cases[start : start + cases_per_shard]
+    if len(expected_cases) != cases_per_shard:
+        raise ValueError(f"case shard 超出 canonical corpus 范围: {target_case_shard}")
+    expected_case_ids = [case.case_id for case in expected_cases]
+    if meta.case_ids != expected_case_ids:
+        raise ValueError(f"shard case_ids 与 canonical partition 不一致: {meta.case_ids!r}")
+
+    expected_profiles = _ordered_profiles(matrix, target_repetition, order_strategy)
+    expected_units = [
+        (profile, case.case_id) for profile in expected_profiles for case in expected_cases
+    ]
+    ordered_runs = sorted(report.runs, key=lambda record: record.execution_order)
+    if [record.execution_order for record in ordered_runs] != list(range(len(expected_units))):
+        raise ValueError("shard execution_order 必须从 0 连续覆盖全部运行单元。")
+    if len(ordered_runs) != len(expected_units):
+        raise ValueError(
+            f"shard run 数量不正确: expected={len(expected_units)} actual={len(ordered_runs)}"
+        )
+
+    canonical_cases = {case.case_id: case for case in expected_cases}
+    actual_units: list[tuple[str, str]] = []
+    expected_profile_order = {profile: index for index, profile in enumerate(expected_profiles)}
+    for record in ordered_runs:
+        if record.repetition != 1:
+            raise ValueError("shard source repetition 必须为 1。")
+        case_id = record.result.case.case_id
+        if case_id not in canonical_cases or record.result.case != canonical_cases[case_id]:
+            raise ValueError(f"shard case 内容与 canonical partition 不一致: {case_id}")
+        if record.profile not in expected_profile_order:
+            raise ValueError(f"shard 包含未知 profile: {record.profile}")
+        if record.profile_order != expected_profile_order[record.profile]:
+            raise ValueError(
+                "shard profile rotation 不一致: "
+                f"profile={record.profile} expected={expected_profile_order[record.profile]} "
+                f"actual={record.profile_order}"
+            )
+        actual_units.append((record.profile, case_id))
+    if actual_units != expected_units:
+        raise ValueError("shard execution sequence 与 canonical profile/case 顺序不一致。")

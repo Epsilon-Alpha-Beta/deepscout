@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.5.3 / Phase 4 第十四批 Sharded Benchmark Experiment Producer**：保留前十三批完整 Benchmark/Quality/Statistics/Bundle/Registry/Lifecycle/Release Gate 基座，
-> 新增手动 GitHub Actions Experiment Producer：低成本 smoke 与正式 600-run 协议严格分离；正式实验采用 20 个 shard 执行、确定性合并、历史 lineage 继承，并自动进入 Release Gate。
-> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前只验证 producer contract 与 synthetic 600-run shard merge，不把离线 fixture 当作真实实验结论。
+> 当前版本为 **v0.5.4 / Phase 4 第十五批 Resumable Producer / Budget & Provenance**：保留前十四批完整 Benchmark/Quality/Statistics/Bundle/Registry/Lifecycle/Release Gate/Producer 基座，
+> 新增官方实验断点恢复、不可变 Producer Plan、分片 provenance 与执行前预算护栏：兼容 shard 可跨失败/中断 run 复用，只有缺失 shard 才重新调用真实 Provider。
+> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前只验证恢复/预算/provenance 的 synthetic 管线，不把离线 fixture 当作真实实验结论。
 
 ## 系统架构
 
@@ -360,13 +360,25 @@ GitHub-hosted runner 单 job 存在 6 小时执行上限，因此 official 不�
 
 本地已用 20 个 synthetic shard 验证与正式协议同形的合并路径：20 shards → 600 runs，600 个运行 identity 全部唯一，最终 `repetitions=5`、`order_strategy=rotate`；同时验证 duplicate shard、缺失 coverage 和 repeated-path 越界均被拒绝。这些验证只证明分片生产管线正确，不代表真实 Provider 的质量或性能结果。
 
+## Phase 4 第十五批：Resumable Producer、预算护栏与 Provenance
+
+第十五批为正式 600-run Producer 增加分片级断点恢复。每次运行都会先生成不可变 `ProducerPlan`，记录 Git SHA、模型、Corpus/Matrix SHA-256、lineage、20-shard 拓扑、并发和实验预算上界，并计算 compatibility fingerprint。恢复时可提供失败/中断 run 的 `resume_run_id`；只有 fingerprint 完全一致且仍有效的 shard artifact 才允许复用。已产生 `deepscout-experiment-bundles` 的 finalized run 会被拒绝作为恢复源，避免重复完成同一正式实验。
+
+恢复预算在真实 Provider/Tavily preflight **之前**执行。工作流提供 `max_new_shards`、`max_new_search_calls` 与 `max_new_research_tokens` 三层 guard；当前 Core Matrix 动态计算出的上界为：每个 5-case shard 最多 1,060 次 search calls / 5,250,000 Research Worker tokens，完整 official 最多 21,200 / 105,000,000。它们是基于 DeepScout 预算配置的工程上界，不是 Provider 账单或实际消耗。
+
+每个 matrix shard 先读取 Resume Plan。可复用 shard 从旧 run 下载后仍通过与新执行 shard完全相同的 canonical 校验；不可复用 shard 才真正执行 30 个 Agent run。随后统一写入当前 run 的 `provenance.json`，记录 reused/executed、来源 run、当前 run/attempt、Git SHA 与 Producer fingerprint。assemble 阶段要求 20 份 provenance 与 Resume Plan 逐一匹配，之后才允许执行 600-run merge。
+
+新增 `src/deepscout/evaluation/producer_plan.py` 与 `scripts/plan_benchmark_producer.py`，将 Plan、artifact inventory、resume decision、预算判定、单 shard 决策和 provenance 汇总作为可测试的库/CLI，而不是只写在 Actions YAML 中。正式 Bundle 同时固化 `producer_plan`、`resume_plan` 与 `shard_provenance`，便于之后审计一个实验究竟复用了哪些 shard。
+
+Synthetic E2E 已验证典型恢复场景：旧 run 保留 17/20 个兼容 shard，本次仅允许 3 个新 shard，则得到 510 个复用 run units + 90 个新 run units；对应新执行上界为 3,180 searches / 15,750,000 Research Worker tokens。20 个 provenance 全部校验后仍确定性合并为完整 600-run repeated experiment。模型/Git/Corpus/Matrix/lineage 指纹漂移、预算超限、artifact 分页截断/过期、finalized resume source 和 provenance 篡改都会被拒绝。
+
 ## 当前验证状态
 
-Phase 4 第十四批当前代码已在项目隔离环境中完成验证：
+Phase 4 第十五批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：127/127 通过（真实 Redis，无 skip；新增覆盖 shard merge、rotation、duplicate/missing/path-escape guards）；
+- `pytest`：138/138 通过（真实 Redis，无 skip；新增覆盖 Producer Plan/Resume、三层预算、单 shard validation 与 provenance closure）；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -377,10 +389,10 @@ Phase 4 第十四批当前代码已在项目隔离环境中完成验证：
 - Live Provider：当前因缺少 Provider/Tavily 凭据而阻塞；
 - Live E2E 诊断：已拆分为 Provider Probe → Tavily Probe → Full Graph 三阶段，并支持 JSON 结果输出与阶段级故障定位；
 - GitHub Actions：CI 在每次 push/PR 后执行 Install、Ruff、Tests，并通过 Actions artifact 运行 Release Gate smoke；远端已验证 7 Bundle 下载、Registry rebuild、`b3 passed/promote` 与 audit artifact 上传链路。
-- Experiment Producer：本地协议 guard、20-shard/600-run synthetic merge 与 merge safety guards 已通过；真实 smoke/official 仍等待 Provider/Tavily 凭据后手动触发。
+- Experiment Producer：20-shard/600-run 基础生产链路继续通过；第十五批新增不可变 Plan 指纹、失败 run shard 复用、三层预算 guard 与 provenance 审计，synthetic 17 reused + 3 executed → 600-run merge 已通过；真实 smoke/official 仍等待 Provider/Tavily 凭据后手动触发。
 
 ## 后续路线
 
 **Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
-**Phase 4 后续**：真实 Provider/Tavily 凭据可用后，先手动运行第十四批 `smoke` producer 验证云端凭据与真实调用，再以显式 `new` 启动首条 official lineage；后续 official run 使用上一条 producer run ID 继续 lineage，并用真实 paired variance 回填 power/MDE。
+**Phase 4 后续**：真实 Provider/Tavily 凭据可用后，先运行 `smoke` producer；首条 official lineage 显式使用 `new`。若 official run 中断，可将该失败 run 作为 `resume_run_id` 并设置 `max_new_shards/search_calls/research_tokens` 预算，仅重跑缺失 shard；成功完成后再用其 run ID 作为后续 `history_run_id` 延续 lineage，并用真实 paired variance 回填 power/MDE。

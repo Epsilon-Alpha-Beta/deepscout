@@ -115,6 +115,20 @@ from deepscout.evaluation.power import (
     required_units_for_power,
 )
 from deepscout.evaluation.power_report import render_power_markdown, save_power_plan
+from deepscout.evaluation.producer_plan import (
+    ProducerPlan,
+    ProducerProvenanceSummary,
+    ProducerResumePlan,
+    ProducerShardPlan,
+    ProducerShardProvenance,
+    artifact_names_from_api_response,
+    build_producer_plan,
+    expected_official_shards,
+    plan_producer_resume,
+    shard_resume_decision,
+    validate_producer_plan_integrity,
+    validate_shard_provenance_set,
+)
 from deepscout.evaluation.quality import (
     BenchmarkQualityIssue,
     BenchmarkQualityPolicy,
@@ -161,6 +175,7 @@ from deepscout.evaluation.repeated_merge import (
     RepeatedShardMetadata,
     load_repeated_shards,
     merge_repeated_shards,
+    validate_repeated_shard,
 )
 from deepscout.evaluation.repeated_report import (
     render_repeated_markdown,
@@ -253,6 +268,19 @@ __all__ = [
     "LoadedRepeatedShard",
     "load_repeated_shards",
     "merge_repeated_shards",
+    "validate_repeated_shard",
+    "ProducerPlan",
+    "ProducerResumePlan",
+    "ProducerShardPlan",
+    "ProducerShardProvenance",
+    "ProducerProvenanceSummary",
+    "artifact_names_from_api_response",
+    "build_producer_plan",
+    "expected_official_shards",
+    "plan_producer_resume",
+    "shard_resume_decision",
+    "validate_producer_plan_integrity",
+    "validate_shard_provenance_set",
     "TrajectoryEvent",
     "SignificanceComparison",
     "SignificanceReport",

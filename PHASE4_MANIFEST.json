@@ -1,7 +1,7 @@
 {
   "project": "DeepScout",
-  "version": "0.5.3",
-  "phase": "Phase 4 - batch 14",
+  "version": "0.5.4",
+  "phase": "Phase 4 - batch 15",
   "validation": {
     "benchmark_corpus": "passed_20_cases_16_categories_v1.3.0",
     "promotion_policy": "passed_valid_status_clean_git_zero_regression_defaults",
@@ -22,9 +22,9 @@
     "ablation_matrix": "passed_6_profiles_120_planned_runs",
     "repeated_experiment_protocol": "passed_600_planned_default_runs",
     "current_mde_dz": "0.7642_at_alpha0.05_family5_power0.8",
-    "pytest_with_redis": "127 passed",
+    "pytest_with_redis": "138 passed",
     "ruff": "passed",
-    "project_version": "0.5.3",
+    "project_version": "0.5.4",
     "container_experiment_lifecycle_validate": "passed_v0.5.0_nonroot_promotion_override_dryrun_apply_exact_delete_api_healthcheck",
     "live_provider_benchmark": "blocked_missing_credentials",
     "real_promotion_decision": "not_run_without_live_provider_bundles",
@@ -50,6 +50,17 @@
     "producer_job_timeout_design": "verified_sharding_for_github_hosted_6h_job_limit",
     "producer_live_smoke": "blocked_missing_credentials",
     "producer_live_official": "not_run_without_live_provider_credentials",
-    "producer_history_continue": "contract_verified_not_remote_dispatched"
+    "producer_history_continue": "contract_verified_not_remote_dispatched",
+    "producer_resume_plan": "passed_immutable_git_model_corpus_matrix_lineage_topology_fingerprint",
+    "producer_resume_budget": "passed_shard_search_research_token_preflight_guards",
+    "producer_resume_budget_bounds": "21200_searches_105000000_research_tokens_full_official_upper_bound",
+    "producer_resume_e2e": "passed_17_reused_3_executed_510_reused_90_new_to_600_merge",
+    "producer_resume_shard_validation": "passed_reused_and_executed_same_canonical_validation",
+    "producer_resume_provenance": "passed_20_shard_closure_source_run_git_sha_fingerprint_audit",
+    "producer_resume_finalized_guard": "passed_finalized_source_run_rejected",
+    "producer_resume_artifact_inventory": "passed_expired_ignored_pagination_truncation_rejected",
+    "producer_resume_live": "not_run_without_live_provider_credentials",
+    "producer_resume_workflow_contract": "passed_budget_before_live_preflight_reuse_or_execute_canonical_validate",
+    "producer_resume_remote": "not_dispatched_without_live_provider_credentials"
   }
 }

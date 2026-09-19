@@ -7,7 +7,11 @@ import pytest
 from deepscout.evaluation.ablation import load_ablation_matrix
 from deepscout.evaluation.models import BenchmarkMetrics, BenchmarkRunResult
 from deepscout.evaluation.repeated import RepeatedRunRecord, build_repeated_report
-from deepscout.evaluation.repeated_merge import load_repeated_shards, merge_repeated_shards
+from deepscout.evaluation.repeated_merge import (
+    load_repeated_shards,
+    merge_repeated_shards,
+    validate_repeated_shard,
+)
 from deepscout.evaluation.runner import load_corpus
 
 
@@ -210,4 +214,48 @@ def test_merge_repeated_shards_rejects_wrong_profile_rotation(tmp_path: Path):
             matrix,
             load_repeated_shards(tmp_path),
             repetitions=1,
+        )
+
+
+def test_validate_repeated_shard_accepts_exact_partition_and_rotation(tmp_path: Path):
+    corpus = load_corpus("benchmarks/corpora/core.json")
+    matrix = load_ablation_matrix("benchmarks/ablations/core.json")
+    case_ids = [case.case_id for case in corpus.cases[5:10]]
+    shard_dir = _write_shard(
+        tmp_path,
+        repetition=2,
+        case_shard=1,
+        case_ids=case_ids,
+    )
+    shard = load_repeated_shards(shard_dir)[0]
+
+    validate_repeated_shard(
+        corpus,
+        matrix,
+        shard,
+        target_repetition=2,
+        target_case_shard=1,
+        order_strategy="rotate",
+    )
+
+
+def test_validate_repeated_shard_rejects_wrong_target_coordinate(tmp_path: Path):
+    corpus = load_corpus("benchmarks/corpora/core.json")
+    matrix = load_ablation_matrix("benchmarks/ablations/core.json")
+    case_ids = [case.case_id for case in corpus.cases[:5]]
+    shard_dir = _write_shard(
+        tmp_path,
+        repetition=1,
+        case_shard=0,
+        case_ids=case_ids,
+    )
+    shard = load_repeated_shards(shard_dir)[0]
+
+    with pytest.raises(ValueError, match="coordinate mismatch"):
+        validate_repeated_shard(
+            corpus,
+            matrix,
+            shard,
+            target_repetition=1,
+            target_case_shard=1,
         )

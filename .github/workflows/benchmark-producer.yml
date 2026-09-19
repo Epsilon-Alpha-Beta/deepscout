@@ -29,6 +29,26 @@ on:
         required: false
         type: string
         default: ""
+      resume_run_id:
+        description: "official only: failed/interrupted producer run whose compatible completed shards may be reused."
+        required: false
+        type: string
+        default: ""
+      max_new_shards:
+        description: "official cost guard: maximum shards allowed to execute instead of reuse (0-20, 30 runs each)."
+        required: true
+        type: number
+        default: 20
+      max_new_search_calls:
+        description: "official upper-bound guard for search calls across newly executed shards."
+        required: true
+        type: number
+        default: 21200
+      max_new_research_tokens:
+        description: "official upper-bound guard for Research Worker tokens across newly executed shards."
+        required: true
+        type: number
+        default: 105000000
       confirmation:
         description: "official requires RUN_OFFICIAL_600; new lineage requires RUN_OFFICIAL_600_NEW_LINEAGE."
         required: false
@@ -44,6 +64,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       candidate_id: ${{ steps.identity.outputs.experiment_id }}
+      reused_shards: ${{ steps.resume-plan.outputs.reused_shards }}
+      new_shards: ${{ steps.resume-plan.outputs.new_shards }}
+      reused_run_units: ${{ steps.resume-plan.outputs.reused_run_units }}
+      new_run_units: ${{ steps.resume-plan.outputs.new_run_units }}
+      new_search_call_upper_bound: ${{ steps.resume-plan.outputs.new_search_call_upper_bound }}
+      new_research_token_upper_bound: ${{ steps.resume-plan.outputs.new_research_token_upper_bound }}
     env:
       DEEPSCOUT_MODEL: ${{ inputs.model }}
       TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
@@ -66,14 +92,34 @@ jobs:
           DEEPSCOUT_PROTOCOL: ${{ inputs.protocol }}
           DEEPSCOUT_LINEAGE_MODE: ${{ inputs.lineage_mode }}
           DEEPSCOUT_HISTORY_RUN_ID: ${{ inputs.history_run_id }}
+          DEEPSCOUT_RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+          DEEPSCOUT_MAX_NEW_SHARDS: ${{ inputs.max_new_shards }}
+          DEEPSCOUT_MAX_NEW_SEARCH_CALLS: ${{ inputs.max_new_search_calls }}
+          DEEPSCOUT_MAX_NEW_RESEARCH_TOKENS: ${{ inputs.max_new_research_tokens }}
           DEEPSCOUT_CONFIRMATION: ${{ inputs.confirmation }}
         run: |
+          if [[ ! "$DEEPSCOUT_MAX_NEW_SHARDS" =~ ^([0-9]|1[0-9]|20)$ ]]; then
+            echo "max_new_shards must be an integer in [0,20]" >&2
+            exit 2
+          fi
+          if [[ ! "$DEEPSCOUT_MAX_NEW_SEARCH_CALLS" =~ ^[0-9]+$ ]]; then
+            echo "max_new_search_calls must be a non-negative integer" >&2
+            exit 2
+          fi
+          if [[ ! "$DEEPSCOUT_MAX_NEW_RESEARCH_TOKENS" =~ ^[0-9]+$ ]]; then
+            echo "max_new_research_tokens must be a non-negative integer" >&2
+            exit 2
+          fi
           if [[ "$DEEPSCOUT_PROTOCOL" == "smoke" ]]; then
-            if [[ -n "$DEEPSCOUT_HISTORY_RUN_ID" ]]; then
-              echo "smoke protocol does not consume history_run_id" >&2
+            if [[ -n "$DEEPSCOUT_HISTORY_RUN_ID" || -n "$DEEPSCOUT_RESUME_RUN_ID" ]]; then
+              echo "smoke protocol does not consume history_run_id/resume_run_id" >&2
               exit 2
             fi
             exit 0
+          fi
+          if [[ -n "$DEEPSCOUT_RESUME_RUN_ID" && ! "$DEEPSCOUT_RESUME_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "official resume_run_id must be numeric" >&2
+            exit 2
           fi
 
           if [[ "$DEEPSCOUT_LINEAGE_MODE" == "continue" ]]; then
@@ -119,8 +165,100 @@ jobs:
             uv run python scripts/run_repeated_ablation.py --validate-only --repetitions 1 --limit 1 --order-strategy rotate
           fi
 
-      - name: Prepare live diagnostics
-        run: mkdir -p benchmark-results/producer/meta
+      - name: Prepare producer metadata
+        run: mkdir -p benchmark-results/producer/meta benchmark-results/producer/plan
+
+      - name: Create immutable producer plan
+        env:
+          DEEPSCOUT_PROTOCOL: ${{ inputs.protocol }}
+          DEEPSCOUT_LINEAGE_MODE: ${{ inputs.lineage_mode }}
+          DEEPSCOUT_HISTORY_RUN_ID: ${{ inputs.history_run_id }}
+          DEEPSCOUT_EXPERIMENT_ID: ${{ steps.identity.outputs.experiment_id }}
+        run: >
+          uv run python scripts/plan_benchmark_producer.py create
+          --protocol "$DEEPSCOUT_PROTOCOL"
+          --model "$DEEPSCOUT_MODEL"
+          --git-sha "$GITHUB_SHA"
+          --lineage-mode "$DEEPSCOUT_LINEAGE_MODE"
+          --history-run-id "$DEEPSCOUT_HISTORY_RUN_ID"
+          --experiment-id "$DEEPSCOUT_EXPERIMENT_ID"
+          --workflow-run-id "$GITHUB_RUN_ID"
+          --workflow-run-attempt "$GITHUB_RUN_ATTEMPT"
+          --max-parallel 2
+          --output benchmark-results/producer/plan/current-plan.json
+
+      - name: Restore prior producer plan
+        if: ${{ inputs.protocol == 'official' && inputs.resume_run_id != '' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: deepscout-producer-plan
+          path: benchmark-results/producer/resume-source
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.resume_run_id }}
+
+      - name: Read prior run artifact inventory
+        if: ${{ inputs.protocol == 'official' && inputs.resume_run_id != '' }}
+        env:
+          DEEPSCOUT_RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+          DEEPSCOUT_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error --location \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $DEEPSCOUT_GITHUB_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$DEEPSCOUT_RESUME_RUN_ID/artifacts?per_page=100" \
+            --output benchmark-results/producer/plan/resume-artifacts.json
+
+      - name: Build official resume and budget plan
+        id: resume-plan
+        if: ${{ inputs.protocol == 'official' }}
+        env:
+          DEEPSCOUT_RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+          DEEPSCOUT_MAX_NEW_SHARDS: ${{ inputs.max_new_shards }}
+          DEEPSCOUT_MAX_NEW_SEARCH_CALLS: ${{ inputs.max_new_search_calls }}
+          DEEPSCOUT_MAX_NEW_RESEARCH_TOKENS: ${{ inputs.max_new_research_tokens }}
+        run: |
+          args=(
+            resume
+            --current-plan benchmark-results/producer/plan/current-plan.json
+            --max-new-shards "$DEEPSCOUT_MAX_NEW_SHARDS"
+            --max-new-search-calls "$DEEPSCOUT_MAX_NEW_SEARCH_CALLS"
+            --max-new-research-tokens "$DEEPSCOUT_MAX_NEW_RESEARCH_TOKENS"
+            --output benchmark-results/producer/plan/resume-plan.json
+          )
+          if [[ -n "$DEEPSCOUT_RESUME_RUN_ID" ]]; then
+            args+=(
+              --previous-plan benchmark-results/producer/resume-source/current-plan.json
+              --artifacts-api-json benchmark-results/producer/plan/resume-artifacts.json
+              --resume-run-id "$DEEPSCOUT_RESUME_RUN_ID"
+            )
+          fi
+          uv run python scripts/plan_benchmark_producer.py "${args[@]}"
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          data = json.loads(Path("benchmark-results/producer/plan/resume-plan.json").read_text())
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a") as handle:
+              for key in (
+                  "reused_shards",
+                  "new_shards",
+                  "reused_run_units",
+                  "new_run_units",
+                  "new_search_call_upper_bound",
+                  "new_research_token_upper_bound",
+              ):
+                  handle.write(f"{key}={data[key]}\n")
+          PY
+
+      - name: Upload producer plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: deepscout-producer-plan
+          path: benchmark-results/producer/plan
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Run live Provider/Tavily preflight
         run: >
@@ -148,6 +286,13 @@ jobs:
           echo "- protocol: $DEEPSCOUT_PROTOCOL" >> "$GITHUB_STEP_SUMMARY"
           echo "- experiment: $DEEPSCOUT_EXPERIMENT_ID" >> "$GITHUB_STEP_SUMMARY"
           echo "- model: $DEEPSCOUT_MODEL" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$DEEPSCOUT_PROTOCOL" == "official" ]]; then
+            echo "- reused shards: ${{ steps.resume-plan.outputs.reused_shards }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- new shards: ${{ steps.resume-plan.outputs.new_shards }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- new run units: ${{ steps.resume-plan.outputs.new_run_units }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- new search-call upper bound: ${{ steps.resume-plan.outputs.new_search_call_upper_bound }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- new Research Worker token upper bound: ${{ steps.resume-plan.outputs.new_research_token_upper_bound }}" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   smoke:
     if: ${{ inputs.protocol == 'smoke' && needs.preflight.result == 'success' }}
@@ -303,7 +448,33 @@ jobs:
       - name: Install benchmark runtime
         run: uv sync --frozen --no-dev
 
+      - name: Download producer plan
+        uses: actions/download-artifact@v8
+        with:
+          name: deepscout-producer-plan
+          path: benchmark-results/producer/plan
+
+      - name: Resolve shard execution decision
+        id: shard-plan
+        run: >
+          uv run python scripts/plan_benchmark_producer.py shard
+          --resume-plan benchmark-results/producer/plan/resume-plan.json
+          --repetition "$DEEPSCOUT_REPETITION"
+          --case-shard "$DEEPSCOUT_CASE_SHARD"
+          --github-output "$GITHUB_OUTPUT"
+
+      - name: Restore reusable benchmark shard
+        if: ${{ steps.shard-plan.outputs.reuse == 'true' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ steps.shard-plan.outputs.artifact_name }}
+          path: benchmark-results/shard
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.resume_run_id }}
+
       - name: Build shard corpus and rotated matrix
+        if: ${{ steps.shard-plan.outputs.reuse != 'true' }}
         run: |
           mkdir -p benchmark-results/shard/run
           uv run python - <<'PY'
@@ -353,6 +524,7 @@ jobs:
           PY
 
       - name: Run official benchmark shard
+        if: ${{ steps.shard-plan.outputs.reuse != 'true' }}
         run: >
           uv run python scripts/run_repeated_ablation.py
           --corpus benchmark-results/shard/corpus.json
@@ -366,6 +538,43 @@ jobs:
           --permutation-resamples 1000
           --output-dir benchmark-results/shard/run
 
+      - name: Validate restored or executed shard
+        run: >
+          uv run python scripts/merge_repeated_ablation.py
+          --validate-shard
+          --shards-root benchmark-results/shard
+          --target-repetition "$DEEPSCOUT_REPETITION"
+          --target-case-shard "$DEEPSCOUT_CASE_SHARD"
+          --order-strategy rotate
+
+      - name: Write shard provenance
+        env:
+          DEEPSCOUT_SHARD_REUSED: ${{ steps.shard-plan.outputs.reuse }}
+          DEEPSCOUT_RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+        run: |
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          plan = json.loads(Path("benchmark-results/producer/plan/current-plan.json").read_text())
+          reused = os.environ["DEEPSCOUT_SHARD_REUSED"] == "true"
+          payload = {
+              "repetition": int(os.environ["DEEPSCOUT_REPETITION"]),
+              "case_shard": int(os.environ["DEEPSCOUT_CASE_SHARD"]),
+              "execution": "reused" if reused else "executed",
+              "source_run_id": (os.environ["DEEPSCOUT_RESUME_RUN_ID"] or None) if reused else None,
+              "current_run_id": os.environ["GITHUB_RUN_ID"],
+              "current_run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "git_sha": os.environ["GITHUB_SHA"],
+              "producer_fingerprint": plan["compatibility_fingerprint"],
+          }
+          Path("benchmark-results/shard/provenance.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
       - name: Upload official benchmark shard
         uses: actions/upload-artifact@v7
         with:
@@ -373,6 +582,7 @@ jobs:
           path: |
             benchmark-results/shard/shard.json
             benchmark-results/shard/run/repeated.json
+            benchmark-results/shard/provenance.json
           if-no-files-found: error
           retention-days: 7
 
@@ -387,6 +597,16 @@ jobs:
       DEEPSCOUT_EXPERIMENT_ID: ${{ needs.preflight.outputs.candidate_id }}
       DEEPSCOUT_LINEAGE_MODE: ${{ inputs.lineage_mode }}
       DEEPSCOUT_HISTORY_RUN_ID: ${{ inputs.history_run_id }}
+      DEEPSCOUT_RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+      DEEPSCOUT_MAX_NEW_SHARDS: ${{ inputs.max_new_shards }}
+      DEEPSCOUT_MAX_NEW_SEARCH_CALLS: ${{ inputs.max_new_search_calls }}
+      DEEPSCOUT_MAX_NEW_RESEARCH_TOKENS: ${{ inputs.max_new_research_tokens }}
+      DEEPSCOUT_REUSED_SHARDS: ${{ needs.preflight.outputs.reused_shards }}
+      DEEPSCOUT_NEW_SHARDS: ${{ needs.preflight.outputs.new_shards }}
+      DEEPSCOUT_REUSED_RUN_UNITS: ${{ needs.preflight.outputs.reused_run_units }}
+      DEEPSCOUT_NEW_RUN_UNITS: ${{ needs.preflight.outputs.new_run_units }}
+      DEEPSCOUT_NEW_SEARCH_CALL_UPPER: ${{ needs.preflight.outputs.new_search_call_upper_bound }}
+      DEEPSCOUT_NEW_RESEARCH_TOKEN_UPPER: ${{ needs.preflight.outputs.new_research_token_upper_bound }}
     steps:
       - uses: actions/checkout@v7
 
@@ -404,12 +624,26 @@ jobs:
           name: deepscout-producer-preflight-${{ github.run_id }}-${{ github.run_attempt }}
           path: benchmark-results/producer/meta
 
+      - name: Download producer plan
+        uses: actions/download-artifact@v8
+        with:
+          name: deepscout-producer-plan
+          path: benchmark-results/producer/plan
+
       - name: Download official shards
         uses: actions/download-artifact@v8
         with:
           pattern: deepscout-benchmark-shard-*
           path: benchmark-results/producer/shards
           merge-multiple: false
+
+      - name: Validate shard provenance set
+        run: >
+          uv run python scripts/plan_benchmark_producer.py provenance
+          --current-plan benchmark-results/producer/plan/current-plan.json
+          --resume-plan benchmark-results/producer/plan/resume-plan.json
+          --shards-root benchmark-results/producer/shards
+          --output benchmark-results/producer/meta/shard-provenance-summary.json
 
       - name: Merge official repeated experiment
         run: >
@@ -465,6 +699,16 @@ jobs:
               "max_parallel": 2,
               "lineage_mode": os.environ["DEEPSCOUT_LINEAGE_MODE"],
               "history_run_id": os.environ["DEEPSCOUT_HISTORY_RUN_ID"] or None,
+              "resume_run_id": os.environ["DEEPSCOUT_RESUME_RUN_ID"] or None,
+              "max_new_shards": int(os.environ["DEEPSCOUT_MAX_NEW_SHARDS"]),
+              "max_new_search_calls": int(os.environ["DEEPSCOUT_MAX_NEW_SEARCH_CALLS"]),
+              "max_new_research_tokens": int(os.environ["DEEPSCOUT_MAX_NEW_RESEARCH_TOKENS"]),
+              "reused_shards": int(os.environ["DEEPSCOUT_REUSED_SHARDS"]),
+              "new_shards": int(os.environ["DEEPSCOUT_NEW_SHARDS"]),
+              "reused_run_units": int(os.environ["DEEPSCOUT_REUSED_RUN_UNITS"]),
+              "new_run_units": int(os.environ["DEEPSCOUT_NEW_RUN_UNITS"]),
+              "new_search_call_upper_bound": int(os.environ["DEEPSCOUT_NEW_SEARCH_CALL_UPPER"]),
+              "new_research_token_upper_bound": int(os.environ["DEEPSCOUT_NEW_RESEARCH_TOKEN_UPPER"]),
               "release_gate": True,
           }
 
@@ -494,6 +738,9 @@ jobs:
           --extra-artifact statistics=benchmark-results/producer/run/statistics.csv
           --extra-artifact deltas=benchmark-results/producer/run/deltas.csv
           --extra-artifact producer_config=benchmark-results/producer/meta/producer-config.json
+          --extra-artifact producer_plan=benchmark-results/producer/plan/current-plan.json
+          --extra-artifact resume_plan=benchmark-results/producer/plan/resume-plan.json
+          --extra-artifact shard_provenance=benchmark-results/producer/meta/shard-provenance-summary.json
           --output-dir "benchmark-results/producer/bundles/$DEEPSCOUT_EXPERIMENT_ID"
 
       - name: Validate official Bundle
@@ -533,6 +780,12 @@ jobs:
           echo "- experiment: $DEEPSCOUT_EXPERIMENT_ID" >> "$GITHUB_STEP_SUMMARY"
           echo "- runs: 600" >> "$GITHUB_STEP_SUMMARY"
           echo "- shards: 20 (max-parallel=2)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- reused shards: $DEEPSCOUT_REUSED_SHARDS" >> "$GITHUB_STEP_SUMMARY"
+          echo "- executed shards: $DEEPSCOUT_NEW_SHARDS" >> "$GITHUB_STEP_SUMMARY"
+          echo "- reused run units: $DEEPSCOUT_REUSED_RUN_UNITS" >> "$GITHUB_STEP_SUMMARY"
+          echo "- executed run units: $DEEPSCOUT_NEW_RUN_UNITS" >> "$GITHUB_STEP_SUMMARY"
+          echo "- new search-call upper bound: $DEEPSCOUT_NEW_SEARCH_CALL_UPPER" >> "$GITHUB_STEP_SUMMARY"
+          echo "- new Research Worker token upper bound: $DEEPSCOUT_NEW_RESEARCH_TOKEN_UPPER" >> "$GITHUB_STEP_SUMMARY"
           echo "- lineage mode: $DEEPSCOUT_LINEAGE_MODE" >> "$GITHUB_STEP_SUMMARY"
           echo "- release gate: enabled" >> "$GITHUB_STEP_SUMMARY"
 
