@@ -266,6 +266,8 @@ Gate runner 使用生产依赖 `uv sync --frozen --no-dev`，随后执行 `build
 
 本地还做了独立 artifact round-trip：7 个 Bundle 经 ZIP 压缩/解压后放到全新目录，再在全新的 production-only venv 中重建 Registry；结果仍为 7 valid / 1 compatibility group，`b3` 为 `passed/promote`，证明 Gate 不依赖原测试目录或 dev dependency。
 
+远端 GitHub Actions current-run smoke 也已通过：artifact 下载校验成功，发现 7 个 manifest，Registry 为 7 valid / 0 invalid / 1 compatibility group，`b3` 输出 `passed/promote`，并成功生成 GitHub Step Summary 与 `deepscout-release-gate-audit` artifact。历史 run 下载路径已完成 workflow contract 校验，但本批未将其记为远端已调度执行。
+
 ## 当前验证边界
 
 第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告；第六批验证 source/rubric 完整性、域名/freshness 策略与 Corpus balance guard；第七批验证 Evidence metadata、source-policy compliance、双评审 agreement 与 adjudication；第八批验证 sidecar 绑定、缺失值语义、profile/case 聚合、human-gold paired delta/significance 与报告产物；第九批验证 bundle hash/identity、tamper detection、compatibility gate、thresholded regression 与 CLI exit semantics；第十批验证多 bundle discovery、duplicate ID rejection、invalid exclusion、last-known-good lineage、history gate 与 dashboard 产物；第十一批验证 promotion policy、manual override、latest decision、stale decision rejection、retention lineage closure 与安全 apply；第十二批验证 strict/relaxed Registry integrity、accepted/regression release gate、policy-as-code、统一审计 artifact 与非破坏性 retention preview；第十三批验证 reusable workflow contract、当前/历史 run artifact 下载路径、production-only runtime、artifact round-trip 与 CI smoke orchestration。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。

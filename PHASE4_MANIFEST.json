@@ -39,6 +39,9 @@
     "artifact_gate_action_versions": "verified_checkout_v7_upload_v7_download_v8_setup_uv_v10.1.0_immutable_sha",
     "artifact_gate_roundtrip": "passed_7_bundles_zip_extract_production_only_venv",
     "artifact_gate_security": "passed_no_override_no_retention_apply_env_quoted_candidate_actions_read",
-    "artifact_gate_ci_smoke": "configured_current_run_artifact_to_reusable_release_gate"
+    "artifact_gate_ci_smoke": "passed_remote_github_actions_current_run_artifact_registry_gate_audit",
+    "artifact_gate_remote_registry": "passed_7_valid_0_invalid_1_group_b3_promote",
+    "artifact_gate_remote_audit": "passed_release_gate_audit_artifact_uploaded",
+    "artifact_gate_historical_run_mode": "contract_verified_not_remote_dispatched"
   }
 }

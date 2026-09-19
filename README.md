@@ -362,7 +362,7 @@ Phase 4 第十三批当前代码已在项目隔离环境中完成验证：
 - 容器：真实构建与运行 smoke 通过，非 root 运行；
 - Live Provider：当前因缺少 Provider/Tavily 凭据而阻塞；
 - Live E2E 诊断：已拆分为 Provider Probe → Tavily Probe → Full Graph 三阶段，并支持 JSON 结果输出与阶段级故障定位；
-- GitHub Actions：CI 在每次 push/PR 后执行 Install、Ruff、Tests，并通过 Actions artifact 运行 Release Gate smoke；远端结果以当前提交对应的 workflow run 为准。
+- GitHub Actions：CI 在每次 push/PR 后执行 Install、Ruff、Tests，并通过 Actions artifact 运行 Release Gate smoke；远端已验证 7 Bundle 下载、Registry rebuild、`b3 passed/promote` 与 audit artifact 上传链路。
 
 ## 后续路线
 
