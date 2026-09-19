@@ -36,7 +36,7 @@
     "release_gate_retention_safety": "passed_preview_only_no_apply_no_override",
     "release_gate_reports": "passed_json_markdown_promotion_retention_csv",
     "artifact_gate_workflow_contract": "passed_workflow_call_dispatch_current_or_historical_run",
-    "artifact_gate_action_versions": "verified_checkout_v7_upload_v7_download_v8_setup_uv_v10",
+    "artifact_gate_action_versions": "verified_checkout_v7_upload_v7_download_v8_setup_uv_v10.1.0_immutable_sha",
     "artifact_gate_roundtrip": "passed_7_bundles_zip_extract_production_only_venv",
     "artifact_gate_security": "passed_no_override_no_retention_apply_env_quoted_candidate_actions_read",
     "artifact_gate_ci_smoke": "configured_current_run_artifact_to_reusable_release_gate"
