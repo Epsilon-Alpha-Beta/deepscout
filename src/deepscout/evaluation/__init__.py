@@ -139,6 +139,16 @@ from deepscout.evaluation.quality_report import (
     render_quality_markdown,
     save_quality_report,
 )
+from deepscout.evaluation.release_gate import (
+    ReleaseGatePolicy,
+    ReleaseGateReport,
+    evaluate_release_gate,
+    load_release_gate_policy,
+)
+from deepscout.evaluation.release_gate_report import (
+    render_release_gate_markdown,
+    save_release_gate_report,
+)
 from deepscout.evaluation.repeated import (
     RepeatedExperimentReport,
     RepeatedRunRecord,
@@ -344,4 +354,10 @@ __all__ = [
     "save_promotion_report",
     "save_retention_report",
     "effective_promotion_decisions",
+    "ReleaseGatePolicy",
+    "ReleaseGateReport",
+    "evaluate_release_gate",
+    "load_release_gate_policy",
+    "render_release_gate_markdown",
+    "save_release_gate_report",
 ]

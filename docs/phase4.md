@@ -1,6 +1,6 @@
 # Phase 4：Benchmark 与轨迹级评测
 
-Phase 4 分十一批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus 并加入 power/MDE 规划；第六批建立 Case 来源政策、人工 gold rubric 与 balance 审计；第七批把质量控制延伸到真实 Evidence 与人工双盲评审；第八批把 source compliance、human gold 与 reviewer agreement 接入 repeated/ablation 聚合，并加入 human-gold paired significance；第九批把整次实验封装为可校验 Experiment Bundle，并支持跨 bundle regression comparison；第十批建立 Experiment Registry/History、last-known-good baseline lineage 与长期趋势 dashboard；第十一批加入 Promotion/Retention 生命周期、人工 override 与安全资产保留策略。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实质量结论。
+Phase 4 分十二批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus 并加入 power/MDE 规划；第六批建立 Case 来源政策、人工 gold rubric 与 balance 审计；第七批把质量控制延伸到真实 Evidence 与人工双盲评审；第八批把 source compliance、human gold 与 reviewer agreement 接入 repeated/ablation 聚合，并加入 human-gold paired significance；第九批把整次实验封装为可校验 Experiment Bundle，并支持跨 bundle regression comparison；第十批建立 Experiment Registry/History、last-known-good baseline lineage 与长期趋势 dashboard；第十一批加入 Promotion/Retention 生命周期、人工 override 与安全资产保留策略；第十二批加入 policy-as-code Release Readiness/CI Gate，统一 Registry 完整性、Promotion eligibility 与 Retention preview。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实质量结论。
 
 ## Benchmark Corpus
 
@@ -238,12 +238,28 @@ CLI：`uv run python scripts/manage_experiment_lifecycle.py promotion ...` 与 `
 
 Synthetic lifecycle smoke 已验证 accepted promotion、regression blocked gate、manual override、latest-decision-wins、stale-decision rejection、milestone/promoted/lineage protection，以及 dry-run/apply 只删除目标 bundle。
 
+## 第十二批：Release Readiness / CI Gate
+
+第十二批把第十、十一批已经分层的 Registry 与 Lifecycle 能力组合为单次自动化发布判定。`ReleaseGatePolicy` 默认要求 Registry 零 invalid bundle，并复用 `PromotionPolicy` 与 `RetentionPolicy`，避免 CI 脚本重新实现一套与库代码漂移的规则。
+
+`evaluate_release_gate()` 对候选先检查 Registry 全局完整性，再执行不可 override 的自动 Promotion 判定，并用该 decision 构造 Retention preview。Gate 通过必须同时满足“无全局 blocker”且 promotion action 为 `promote`。候选自身的 Registry warning 保留为 warning，不会被静默吞掉。
+
+默认 policy 固化在 `benchmarks/policies/release_gate.json`。CLI：
+
+```bash
+uv run python scripts/gate_experiment_release.py   --registry benchmark-results/experiment-registry-latest/registry.json   --candidate-id <experiment-id>   --output-dir benchmark-results/release-gate-latest
+```
+
+输出 `release_gate.json/md`、`promotion_decision.json/md` 与 `retention_plan.json/md/csv`。exit 0 表示 gate passed，exit 1 表示策略阻塞，exit 2 表示输入或身份错误。
+
+安全边界是有意设计的：Release Gate 不暴露 manual override，也不调用 `apply_retention_plan()`；因此 CI 只能判断和生成预览，不能自行绕过发布政策或删除历史 bundle。需要人工例外或真实删除时，仍必须显式使用第十一批 Lifecycle CLI，并留下 actor/reason 或 apply 审计。
+
 ## 当前验证边界
 
-第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告；第六批验证 source/rubric 完整性、域名/freshness 策略与 Corpus balance guard；第七批验证 Evidence metadata、source-policy compliance、双评审 agreement 与 adjudication；第八批验证 sidecar 绑定、缺失值语义、profile/case 聚合、human-gold paired delta/significance 与报告产物；第九批验证 bundle hash/identity、tamper detection、compatibility gate、thresholded regression 与 CLI exit semantics；第十批验证多 bundle discovery、duplicate ID rejection、invalid exclusion、last-known-good lineage、history gate 与 dashboard 产物；第十一批验证 promotion policy、manual override、latest decision、stale decision rejection、retention lineage closure 与安全 apply。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
+第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告；第六批验证 source/rubric 完整性、域名/freshness 策略与 Corpus balance guard；第七批验证 Evidence metadata、source-policy compliance、双评审 agreement 与 adjudication；第八批验证 sidecar 绑定、缺失值语义、profile/case 聚合、human-gold paired delta/significance 与报告产物；第九批验证 bundle hash/identity、tamper detection、compatibility gate、thresholded regression 与 CLI exit semantics；第十批验证多 bundle discovery、duplicate ID rejection、invalid exclusion、last-known-good lineage、history gate 与 dashboard 产物；第十一批验证 promotion policy、manual override、latest decision、stale decision rejection、retention lineage closure 与安全 apply；第十二批验证 strict/relaxed Registry integrity、accepted/regression release gate、policy-as-code、统一审计 artifact 与非破坏性 retention preview。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
 
 真实 Provider + Tavily 仍因服务器缺少凭据而阻塞，因此当前只验证运行后质量聚合的 synthetic fixture，不提交伪造的真实来源合规率、人工 gold score、agreement 或显著性结论。
 
 ## 后续批次
 
-真实 Provider 凭据可用后，先用低成本 Case 产生真实 Evidence，执行 source-policy compliance；随后生成 blind packet 做独立双评审与必要 adjudication，再按预算运行 20-case repeated/ablation，并用真实 paired variance 回填 `--paired-std`。若目标转向 `dz≈0.5` 的中等效应确认性结论，应优先继续扩充独立 Case，而不是只增加同一 Case 的 repetitions。对于 citation 消融继续保持“保留 verifier 测量、只关闭 feedback”的实验设计，避免测量口径随处理组变化。
+真实 Provider 凭据可用后，先用低成本 Case 产生真实 Evidence，执行 source-policy compliance，并将生成的真实 Bundle 接入 Release Gate；随后生成 blind packet 做独立双评审与必要 adjudication，再按预算运行 20-case repeated/ablation，并用真实 paired variance 回填 `--paired-std`。若目标转向 `dz≈0.5` 的中等效应确认性结论，应优先继续扩充独立 Case，而不是只增加同一 Case 的 repetitions。对于 citation 消融继续保持“保留 verifier 测量、只关闭 feedback”的实验设计，避免测量口径随处理组变化。

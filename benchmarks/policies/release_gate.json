@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "require_zero_invalid_registry": true,
+  "promotion_policy": {
+    "require_valid": true,
+    "allowed_registry_statuses": [
+      "baseline",
+      "accepted"
+    ],
+    "require_clean_git": true,
+    "max_regressions": 0,
+    "require_zero_regressions": true
+  },
+  "retention_policy": {
+    "keep_latest_accepted_per_group": 3,
+    "keep_latest_regressions_per_group": 2,
+    "keep_invalid": false,
+    "protect_promoted": true,
+    "protect_lineage_roots": true,
+    "preserve_lineage_closure": true
+  }
+}

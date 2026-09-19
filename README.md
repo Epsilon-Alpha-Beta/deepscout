@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.5.0 / Phase 4 第十一批 Promotion / Retention Lifecycle**：保留前十批完整 Benchmark/Quality/Statistics/Bundle/Registry 基座，
-> 新增实验晋级决策、人工 override 审计、正式 promoted baseline 保护、milestone/lineage-aware retention planning 与安全 apply。
-> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前只用 synthetic lifecycle history 验证 promotion/retention，不提交伪造的真实发布晋级或保留结论。
+> 当前版本为 **v0.5.1 / Phase 4 第十二批 Release Readiness / CI Gate**：保留前十一批完整 Benchmark/Quality/Statistics/Bundle/Registry/Lifecycle 基座，
+> 新增 policy-as-code 发布门禁，把 Registry 完整性、Promotion eligibility 与 Retention preview 串成一次机器可判定的发布审计。
+> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前只用 synthetic bundle history 验证 gate semantics，不提交伪造的真实发布结论。
 
 ## 系统架构
 
@@ -326,13 +326,23 @@ Retention 默认只生成 `retention_plan.json/md/csv`，不会删除。`--dry-r
 
 新增 `scripts/manage_experiment_lifecycle.py`：`promotion` 子命令生成 promotion decision；`retention` 子命令生成/模拟/应用 retention plan。Synthetic CLI 已验证：accepted `b3` 自动 promote；regression `b2` 默认 hold 并 exit 1；带 actor/reason 的 override 可 promote；Retention dry-run 只报告 `b4` would_delete，apply 后仅删除 `b4`。
 
+## Phase 4 第十二批：Release Readiness / CI Gate
+
+新增 `benchmarks/policies/release_gate.json`，将发布规则显式版本化：默认要求 Registry 中没有 invalid bundle，候选满足 valid + baseline/accepted + clean git + zero regression，并沿用第十一批 RetentionPolicy 生成资产保留预览。
+
+新增 `scripts/gate_experiment_release.py`。它读取已有 `registry.json` 和 policy，对候选实验执行统一门禁，并一次输出 `release_gate.json/md`、`promotion_decision.json/md` 与 `retention_plan.json/md/csv`。通过时 exit 0，策略阻塞时 exit 1，输入/身份错误时 exit 2，适合接入 CI 或发布流水线。
+
+该 Gate 有两条刻意的安全边界：**不提供 manual override 参数**，因此自动化流水线不能绕过 promotion policy；**永远不执行 retention apply**，只生成 keep/delete preview。真正的人工 override 与删除仍必须走 `manage_experiment_lifecycle.py` 的显式命令。
+
+Synthetic CLI smoke 已验证：accepted `b3` 得到 `passed/promote`；regression `b2` 得到 `blocked/hold`；严格 policy 会因 Registry 中任一 invalid bundle 阻塞候选，而显式放宽 `require_zero_invalid_registry` 时只降级为 warning。
+
 ## 当前验证状态
 
-Phase 4 第十一批当前代码已在项目隔离环境中完成验证：
+Phase 4 第十二批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：118/118 通过（真实 Redis，无 skip；覆盖 Promotion/Override/Retention/安全删除与历史回归）；
+- `pytest`：122/122 通过（真实 Redis，无 skip；覆盖 Release Gate、Promotion/Override/Retention、安全删除与历史回归）；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -348,4 +358,4 @@ Phase 4 第十一批当前代码已在项目隔离环境中完成验证：
 
 **Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
-**Phase 4 后续**：真实 Provider 凭据可用后把 smoke/正式实验持续写入 Registry，并由 promotion/retention lifecycle 管理正式基线、milestone 与历史资产；真实 paired variance 继续回填 power/MDE。
+**Phase 4 后续**：真实 Provider 凭据可用后把 smoke/正式实验持续写入 Registry，以 release gate 作为自动发布门禁，再由 promotion/retention lifecycle 管理正式基线、milestone 与历史资产；真实 paired variance 继续回填 power/MDE。
