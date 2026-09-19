@@ -38,6 +38,19 @@ from deepscout.evaluation.experiment_compare_report import (
     render_experiment_comparison_markdown,
     save_experiment_comparison,
 )
+from deepscout.evaluation.experiment_registry import (
+    ExperimentRegistryEntry,
+    ExperimentRegistryReport,
+    ExperimentTrendPoint,
+    build_experiment_registry,
+    compatibility_key,
+    discover_experiment_bundles,
+    registry_entry,
+)
+from deepscout.evaluation.experiment_registry_report import (
+    render_experiment_registry_markdown,
+    save_experiment_registry,
+)
 from deepscout.evaluation.human_review import (
     AdjudicationDecision,
     AgreementReport,
@@ -280,4 +293,13 @@ __all__ = [
     "compare_experiment_bundles",
     "render_experiment_comparison_markdown",
     "save_experiment_comparison",
+    "ExperimentRegistryEntry",
+    "ExperimentRegistryReport",
+    "ExperimentTrendPoint",
+    "build_experiment_registry",
+    "compatibility_key",
+    "discover_experiment_bundles",
+    "registry_entry",
+    "render_experiment_registry_markdown",
+    "save_experiment_registry",
 ]

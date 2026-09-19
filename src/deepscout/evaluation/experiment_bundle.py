@@ -63,10 +63,27 @@ def sha256_file(path: str | Path) -> str:
 
 
 def _git_metadata(repo_root: Path) -> tuple[str, bool]:
-    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo_root, text=True).strip()
-    dirty = bool(
-        subprocess.check_output(["git", "status", "--porcelain"], cwd=repo_root, text=True).strip()
-    )
+    try:
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        dirty = bool(
+            subprocess.check_output(
+                ["git", "status", "--porcelain"],
+                cwd=repo_root,
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+        raise ValueError(
+            "无法从 repo_root 读取 Git metadata；请显式提供 git_sha/git_dirty。"
+        ) from exc
+    if not sha:
+        raise ValueError("Git SHA 为空；请显式提供 git_sha/git_dirty。")
     return sha, dirty
 
 
@@ -199,7 +216,7 @@ def create_experiment_bundle(
 
     manifest = ExperimentBundleManifest(
         experiment_id=experiment_id
-        or f"exp-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{git_sha[:8]}",
+        or f"exp-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{resolved_sha[:8]}",
         created_at=datetime.now(UTC).isoformat(),
         project_version=__version__,
         git_sha=resolved_sha,

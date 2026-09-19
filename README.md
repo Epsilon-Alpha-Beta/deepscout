@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.4.8 / Phase 4 第九批 Experiment Bundle 与跨批次 Regression Comparison**：保留前八批完整 Benchmark/Quality/Statistics 基座，
-> 新增可校验的实验资产封装、Git/Provider/Model/配置身份记录、SHA-256 完整性验证，以及 bundle-to-bundle compatibility gate 与 regression comparator。
-> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前只用 synthetic bundle 验证可复现与比较管线，不提交伪造的真实回归结论。
+> 当前版本为 **v0.4.9 / Phase 4 第十批 Experiment Registry / History 与 Baseline Lineage**：保留前九批完整 Benchmark/Quality/Statistics/Bundle 基座，
+> 新增多 Bundle 历史索引、last-known-good baseline lineage、自动 history regression gate、跨 commit/model 的 long-form 趋势表与静态 dashboard。
+> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前只用 synthetic bundle history 验证 Registry/lineage，不提交伪造的真实长期趋势或回归结论。
 
 ## 系统架构
 
@@ -302,13 +302,25 @@ Bundle 创建和校验不仅检查文件 hash，还核对 Corpus name/version �
 
 比较报告输出 `comparison.json / comparison.md / comparisons.csv`。Synthetic CLI smoke 已验证 candidate 同时出现 quality/human-gold 下降和 wall/worker 上升时会返回 regression，并且 `--fail-on-regression` exit 1。
 
+## Phase 4 第十批：Experiment Registry / History 与 Baseline Lineage
+
+新增 `ExperimentRegistryReport`：递归扫描 bundle root 下的 `manifest.json`，逐个执行完整 Bundle validation，并按 Corpus/Matrix/baseline/profile set 生成稳定 compatibility key。Registry 会拒绝被篡改、identity 不一致或 experiment ID 重复的 bundle；invalid bundle 不会进入 lineage 或 baseline 候选。
+
+每个 compatibility group 按 `created_at` 排序：第一份 valid bundle 作为 lineage root；之后 candidate 始终与“最近一个兼容且已通过 gate 的 bundle”比较。若 candidate 出现 regression，它会记录为 `regression`，但不会推进 baseline；下一次实验仍与 last-known-good 比较。只有零 regression 的 candidate 才标 `accepted` 并成为新的 baseline。
+
+新增 `scripts/build_experiment_registry.py`。`--candidate-id ... --fail-on-regression` 可直接作为 history CI gate：candidate regression 时 exit 1；candidate 不存在或 invalid 时 exit 2；accepted/baseline 时 exit 0。`--fail-on-invalid` 可进一步阻止 Registry 中存在坏 bundle。
+
+Dashboard 输出 `registry.json / registry.md / registry_entries.csv / lineage.csv / history_metrics.csv`，并按 compatibility group + baseline profile 生成 `quality_proxy_score / wall_seconds / human_gold_score / source_compliance_rate` SVG 趋势图。历史 metric 使用 long-form 结构，后续可直接接 Pandas/BI。
+
+第十批同时修复第九批一个未覆盖路径：自动生成 experiment ID 时现在正确使用解析后的 `resolved_sha`；Git metadata 读取失败会明确要求显式 `git_sha/git_dirty`，不会在无 Git 上下文时产生不可追溯 ID。
+
 ## 当前验证状态
 
-Phase 4 第九批当前代码已在项目隔离环境中完成验证：
+Phase 4 第十批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：107/107 通过（真实 Redis，无 skip；覆盖 Experiment Bundle 完整性、兼容性门禁、Regression Comparison 与历史回归）；
+- `pytest`：111/111 通过（真实 Redis，无 skip；覆盖 Experiment Registry、last-known-good lineage、history gate 与历史回归）；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -324,4 +336,4 @@ Phase 4 第九批当前代码已在项目隔离环境中完成验证：
 
 **Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
-**Phase 4 后续**：真实 Provider 凭据可用后按 experiment bundle 规范保存每次 smoke/正式实验，再用 regression comparator 对不同 commit、模型或配置做版本化对照；真实 paired variance 继续回填 power/MDE。
+**Phase 4 后续**：真实 Provider 凭据可用后把 smoke/正式实验持续写入 Registry，让 last-known-good baseline、跨 commit/model 趋势与 CI history gate 使用真实 Bundle；真实 paired variance 继续回填 power/MDE。

@@ -186,3 +186,23 @@ def test_incompatible_matrix_identity_blocks_comparison(tmp_path: Path):
     report = compare_experiment_bundles(baseline, candidate)
     assert report.comparable is False
     assert any("candidate bundle" in item or "matrix" in item for item in report.incompatibilities)
+
+
+def test_bundle_default_experiment_id_uses_resolved_git_sha(tmp_path: Path):
+    source = tmp_path / "source"
+    source.mkdir()
+    repeated_path = source / "repeated.json"
+    repeated = _repeated(repeated_path)
+    quality_path = source / "quality.json"
+    _quality(quality_path, repeated)
+
+    bundle = tmp_path / "auto-id"
+    manifest = create_experiment_bundle(
+        repeated_path=repeated_path,
+        output_dir=bundle,
+        corpus_path="benchmarks/corpora/core.json",
+        matrix_path="benchmarks/ablations/core.json",
+        quality_aggregate_path=quality_path,
+    )
+    assert manifest.git_sha
+    assert manifest.experiment_id.endswith(manifest.git_sha[:8])
