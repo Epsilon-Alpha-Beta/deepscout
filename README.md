@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.4.7 / Phase 4 第八批运行后质量聚合与人工 Gold 显著性分析**：保留 Benchmark/Ablation/Repeated/Significance/Power/Case-QC/Review 基座，
-> 新增基于 `(profile, repetition, case_id)` 的质量 sidecar 聚合，把 source compliance、human gold 与 reviewer agreement 接入 repeated/ablation 统计，并支持 human-gold paired significance。
-> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前只验证 synthetic 质量聚合管线，不提交伪造的真实合规率、人工 gold 分数或显著性结论。
+> 当前版本为 **v0.4.8 / Phase 4 第九批 Experiment Bundle 与跨批次 Regression Comparison**：保留前八批完整 Benchmark/Quality/Statistics 基座，
+> 新增可校验的实验资产封装、Git/Provider/Model/配置身份记录、SHA-256 完整性验证，以及 bundle-to-bundle compatibility gate 与 regression comparator。
+> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前只用 synthetic bundle 验证可复现与比较管线，不提交伪造的真实回归结论。
 
 ## 系统架构
 
@@ -290,13 +290,25 @@ Human gold paired delta 使用与 repeated 层一致的同 `(repetition, case)` 
 
 第八批还修复了显著性 Markdown 的一个历史边界：当 raw exact p 已可达但 Holm 分辨率仍不可达时，报告现在正确使用 `minimum_reportable_holm_p`，不会访问不存在的旧字段。
 
+## Phase 4 第九批：Experiment Bundle 与跨批次 Regression Comparison
+
+新增 `ExperimentBundleManifest`：一次实验会把 repeated result、Corpus、Ablation Matrix、可选 runtime quality aggregate 与额外 artifact 复制到独立 bundle，并记录每个文件的 SHA-256、字节数和 logical role；manifest 同时记录项目版本、Git SHA/dirty、Provider/Model 标识、Corpus/Matrix/baseline/profile set/repetitions 以及 bootstrap/实验配置。密钥不进入 manifest。
+
+Bundle 创建和校验不仅检查文件 hash，还核对 Corpus name/version 与 Matrix name/version/baseline/profile set 是否与 repeated identity 一致。任何 artifact 被篡改、文件缺失、路径越界或 identity 漂移都会使 bundle invalid。Docker/无 `.git` 环境可显式传 `--git-sha` 与 `--git-dirty`，不会静默写 `unknown`。
+
+新增 `scripts/create_experiment_bundle.py` 和 `scripts/compare_experiments.py`。Comparator 先执行 compatibility gate：Corpus/Matrix/baseline/profile set 不一致直接 `incomparable`；repetitions、Provider 或 Model 不同只给 warning，允许做有意识的跨模型/跨重复次数对比。
+
+默认 regression rules 显式区分 higher-is-better 的 `quality_proxy_score/citation_coverage/source_diversity_ratio/source_compliance_rate/human_gold_score/human_gold_pass_rate` 与 lower-is-better 的 `search_calls/research_tokens/worker_seconds/wall_seconds/estimated_tracked_cost_usd`。每条比较同时保存 absolute threshold、relative threshold 和最终 effective threshold；`--fail-on-regression` 可用于 CI 门禁。
+
+比较报告输出 `comparison.json / comparison.md / comparisons.csv`。Synthetic CLI smoke 已验证 candidate 同时出现 quality/human-gold 下降和 wall/worker 上升时会返回 regression，并且 `--fail-on-regression` exit 1。
+
 ## 当前验证状态
 
-Phase 4 第八批当前代码已在项目隔离环境中完成验证：
+Phase 4 第九批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：104/104 通过（真实 Redis，无 skip；覆盖 runtime quality aggregate、human-gold paired significance 与历史回归）；
+- `pytest`：107/107 通过（真实 Redis，无 skip；覆盖 Experiment Bundle 完整性、兼容性门禁、Regression Comparison 与历史回归）；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -312,4 +324,4 @@ Phase 4 第八批当前代码已在项目隔离环境中完成验证：
 
 **Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
-**Phase 4 后续**：真实 Provider 凭据可用后先做低成本 end-to-end quality smoke；产出真实 Evidence、双盲 review 与 adjudication sidecar 后直接运行 quality aggregate，再将真实 human-gold paired variance 回填 power/MDE。
+**Phase 4 后续**：真实 Provider 凭据可用后按 experiment bundle 规范保存每次 smoke/正式实验，再用 regression comparator 对不同 commit、模型或配置做版本化对照；真实 paired variance 继续回填 power/MDE。

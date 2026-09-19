@@ -1,6 +1,6 @@
 # Phase 4：Benchmark 与轨迹级评测
 
-Phase 4 分八批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus 并加入 power/MDE 规划；第六批建立 Case 来源政策、人工 gold rubric 与 balance 审计；第七批把质量控制延伸到真实 Evidence 与人工双盲评审；第八批把 source compliance、human gold 与 reviewer agreement 接入 repeated/ablation 聚合，并加入 human-gold paired significance。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实质量结论。
+Phase 4 分九批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus 并加入 power/MDE 规划；第六批建立 Case 来源政策、人工 gold rubric 与 balance 审计；第七批把质量控制延伸到真实 Evidence 与人工双盲评审；第八批把 source compliance、human gold 与 reviewer agreement 接入 repeated/ablation 聚合，并加入 human-gold paired significance；第九批把整次实验封装为可校验 Experiment Bundle，并支持跨 bundle regression comparison。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实质量结论。
 
 ## Benchmark Corpus
 
@@ -206,9 +206,19 @@ Human gold paired delta 按同一 `(repetition, case)` 计算。全局 `profile_
 
 CLI：`uv run python scripts/aggregate_runtime_quality.py --repeated <repeated.json> ...`。输出包括 `quality_aggregate.json / quality_aggregate.md / quality_observations.csv / quality_statistics.csv / human_gold_deltas.csv`、`charts/source_policy_pass.svg`、`charts/human_gold_score.svg`、`charts/delta_human_gold_score.svg`，以及有足够 paired gold 数据时的 `human_gold_significance.json/csv/md`。
 
+## 第九批：Experiment Bundle 与 Regression Comparison
+
+`ExperimentBundleManifest` 将 repeated artifact、Corpus、Ablation Matrix、可选 quality aggregate 和额外结果复制到 bundle 的 `artifacts/`，记录 logical role、SHA-256 与字节数，并记录 project version、Git SHA/dirty、Provider/Model、实验 identity 与运行配置。Bundle validator 会重新计算 hash，并校验 Corpus/Matrix 文件内容与 repeated identity；只要文件被篡改或 identity 漂移就判 invalid。
+
+创建 CLI：`uv run python scripts/create_experiment_bundle.py --repeated ... --quality-aggregate ... --provider ... --model ... --output-dir ...`；校验：`--validate <bundle>`。在 Docker 等没有 `.git` 的环境中必须显式传 `--git-sha`（可选 `--git-dirty`），避免不可追溯的 `unknown` Git 身份。
+
+`compare_experiment_bundles()` 先做 compatibility gate：Corpus name/version、Matrix name/version、baseline 和 profile set 必须一致；repetitions、Provider/Model 差异记录为 warning。只有兼容实验才比较 repeated/quality profile metrics。默认阈值使用 `max(absolute_threshold, |baseline| × relative_threshold)`，方向和两个原始 threshold 都写入 comparison artifact。
+
+`compare_experiments.py --fail-on-regression` 在发现 regression 时 exit 1，在 identity 不兼容时 exit 2，可直接作为 CI/发布门禁。报告输出 `comparison.json / comparison.md / comparisons.csv`。
+
 ## 当前验证边界
 
-第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告；第六批验证 source/rubric 完整性、域名/freshness 策略与 Corpus balance guard；第七批验证 Evidence metadata、source-policy compliance、双评审 agreement 与 adjudication；第八批验证 sidecar 绑定、缺失值语义、profile/case 聚合、human-gold paired delta/significance 与报告产物。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
+第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告；第六批验证 source/rubric 完整性、域名/freshness 策略与 Corpus balance guard；第七批验证 Evidence metadata、source-policy compliance、双评审 agreement 与 adjudication；第八批验证 sidecar 绑定、缺失值语义、profile/case 聚合、human-gold paired delta/significance 与报告产物；第九批验证 bundle hash/identity、tamper detection、compatibility gate、thresholded regression 与 CLI exit semantics。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
 
 真实 Provider + Tavily 仍因服务器缺少凭据而阻塞，因此当前只验证运行后质量聚合的 synthetic fixture，不提交伪造的真实来源合规率、人工 gold score、agreement 或显著性结论。
 

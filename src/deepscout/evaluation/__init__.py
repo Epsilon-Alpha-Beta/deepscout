@@ -17,6 +17,27 @@ from deepscout.evaluation.ablation_report import (
     render_ablation_markdown,
     save_ablation_report,
 )
+from deepscout.evaluation.experiment_bundle import (
+    BundleValidationReport,
+    ExperimentArtifact,
+    ExperimentBundleManifest,
+    ExperimentIdentity,
+    artifact_path,
+    create_experiment_bundle,
+    load_bundle_manifest,
+    validate_experiment_bundle,
+)
+from deepscout.evaluation.experiment_compare import (
+    DEFAULT_RULES,
+    ExperimentComparisonReport,
+    MetricComparison,
+    MetricRule,
+    compare_experiment_bundles,
+)
+from deepscout.evaluation.experiment_compare_report import (
+    render_experiment_comparison_markdown,
+    save_experiment_comparison,
+)
 from deepscout.evaluation.human_review import (
     AdjudicationDecision,
     AgreementReport,
@@ -244,4 +265,19 @@ __all__ = [
     "save_runtime_quality_aggregate",
     "apply_multiple_corrections",
     "build_paired_comparison",
+    "BundleValidationReport",
+    "ExperimentArtifact",
+    "ExperimentBundleManifest",
+    "ExperimentIdentity",
+    "artifact_path",
+    "create_experiment_bundle",
+    "load_bundle_manifest",
+    "validate_experiment_bundle",
+    "DEFAULT_RULES",
+    "ExperimentComparisonReport",
+    "MetricComparison",
+    "MetricRule",
+    "compare_experiment_bundles",
+    "render_experiment_comparison_markdown",
+    "save_experiment_comparison",
 ]
