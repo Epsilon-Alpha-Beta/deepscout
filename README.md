@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.5.1 / Phase 4 第十二批 Release Readiness / CI Gate**：保留前十一批完整 Benchmark/Quality/Statistics/Bundle/Registry/Lifecycle 基座，
-> 新增 policy-as-code 发布门禁，把 Registry 完整性、Promotion eligibility 与 Retention preview 串成一次机器可判定的发布审计。
-> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前只用 synthetic bundle history 验证 gate semantics，不提交伪造的真实发布结论。
+> 当前版本为 **v0.5.2 / Phase 4 第十三批 Artifact-driven GitHub Actions Gate**：保留前十二批完整 Benchmark/Quality/Statistics/Bundle/Registry/Lifecycle/Release Gate 基座，
+> 新增可复用 GitHub Actions 发布门禁：从 workflow artifact 恢复 Experiment Bundles，重建 Registry，执行 Release Gate，并回传可审计结果。
+> 真实 LLM Provider + Tavily 仍缺少凭据，因此 CI 只用 synthetic bundle artifact 验证流水线；不会把 smoke fixture 当作真实实验结论。
 
 ## 系统架构
 
@@ -336,9 +336,19 @@ Retention 默认只生成 `retention_plan.json/md/csv`，不会删除。`--dry-r
 
 Synthetic CLI smoke 已验证：accepted `b3` 得到 `passed/promote`；regression `b2` 得到 `blocked/hold`；严格 policy 会因 Registry 中任一 invalid bundle 阻塞候选，而显式放宽 `require_zero_invalid_registry` 时只降级为 warning。
 
+## Phase 4 第十三批：Artifact-driven GitHub Actions Gate
+
+新增 `.github/workflows/release-gate.yml`，作为可复用 `workflow_call` + 手动 `workflow_dispatch` 发布门禁。上游实验 job 只需把一个或多个完整 Experiment Bundle 上传为 Actions artifact，Gate 会在独立 runner 下载 artifact、检查 `manifest.json` 数量、重新构建 Registry，再执行第十二批的 policy-as-code Release Gate。
+
+同一 workflow 内调用时直接读取当前 run 的 artifact；手动审计历史实验时必须显式提供 `source_run_id`，并使用 `GITHUB_TOKEN` 的 `actions: read` 权限从指定 run 下载。输入只通过 Action 参数或环境变量传递，候选 experiment ID 不直接拼接进 shell 命令。
+
+Gate 无论成功还是被策略阻塞，都会尽可能把 Registry、`release_gate.json/md`、Promotion decision 和 Retention preview 上传为 `deepscout-release-gate-audit` artifact；Markdown 同时写入 GitHub Step Summary。Gate 仍然不暴露 manual override，也不会执行 retention apply。
+
+主 `CI` 增加 artifact-boundary smoke：测试 job 生成现有 synthetic bundle history，并以 1 天保留期上传 `deepscout-experiment-bundles-smoke`；随后通过 reusable workflow 对 accepted `b3` 执行真实 artifact 下载 → Registry rebuild → Release Gate。该 smoke 验证的是流水线与 artifact 边界，不代表真实 Provider 质量结果。
+
 ## 当前验证状态
 
-Phase 4 第十二批当前代码已在项目隔离环境中完成验证：
+Phase 4 第十三批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
@@ -352,10 +362,10 @@ Phase 4 第十二批当前代码已在项目隔离环境中完成验证：
 - 容器：真实构建与运行 smoke 通过，非 root 运行；
 - Live Provider：当前因缺少 Provider/Tavily 凭据而阻塞；
 - Live E2E 诊断：已拆分为 Provider Probe → Tavily Probe → Full Graph 三阶段，并支持 JSON 结果输出与阶段级故障定位；
-- GitHub Actions：CI 在每次 push 后执行 Install、Ruff、Tests；远端结果以当前提交对应的 workflow run 为准。
+- GitHub Actions：CI 在每次 push/PR 后执行 Install、Ruff、Tests，并通过 Actions artifact 运行 Release Gate smoke；远端结果以当前提交对应的 workflow run 为准。
 
 ## 后续路线
 
 **Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
-**Phase 4 后续**：真实 Provider 凭据可用后把 smoke/正式实验持续写入 Registry，以 release gate 作为自动发布门禁，再由 promotion/retention lifecycle 管理正式基线、milestone 与历史资产；真实 paired variance 继续回填 power/MDE。
+**Phase 4 后续**：真实 Provider 凭据可用后，由真实 Benchmark/Repeated workflow 上传 Experiment Bundle artifact，直接复用当前 artifact-driven release gate；通过后再由 promotion/retention lifecycle 管理正式基线、milestone 与历史资产，并用真实 paired variance 回填 power/MDE。

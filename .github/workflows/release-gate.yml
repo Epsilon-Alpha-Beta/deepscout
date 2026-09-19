@@ -1,0 +1,111 @@
+name: Experiment Release Gate
+
+on:
+  workflow_call:
+    inputs:
+      candidate_id:
+        description: Experiment ID to evaluate.
+        required: true
+        type: string
+      artifact_name:
+        description: Artifact containing one or more Experiment Bundles.
+        required: false
+        type: string
+        default: deepscout-experiment-bundles
+      source_run_id:
+        description: Optional workflow run ID to download the artifact from.
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      candidate_id:
+        description: Experiment ID to evaluate.
+        required: true
+        type: string
+      artifact_name:
+        description: Artifact containing one or more Experiment Bundles.
+        required: true
+        type: string
+        default: deepscout-experiment-bundles
+      source_run_id:
+        description: Workflow run ID that produced the artifact.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate manual artifact source
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.source_run_id == '' }}
+        run: |
+          echo "workflow_dispatch requires source_run_id" >&2
+          exit 2
+
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.11"
+          version: "latest-known"
+
+      - name: Install release-gate runtime
+        run: uv sync --frozen --no-dev
+
+      - name: Download bundles from current workflow run
+        if: ${{ inputs.source_run_id == '' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: benchmark-results/ci-input
+
+      - name: Download bundles from selected workflow run
+        if: ${{ inputs.source_run_id != '' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: benchmark-results/ci-input
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+
+      - name: Inspect bundle artifact
+        run: |
+          manifest_count="$(find benchmark-results/ci-input -type f -name manifest.json | wc -l)"
+          echo "experiment_manifests=${manifest_count}"
+          test "${manifest_count}" -gt 0
+
+      - name: Build experiment registry
+        run: >
+          uv run python scripts/build_experiment_registry.py
+          --bundles-root benchmark-results/ci-input
+          --output-dir benchmark-results/release-gate/registry
+
+      - name: Evaluate release gate
+        env:
+          DEEPSCOUT_CANDIDATE_ID: ${{ inputs.candidate_id }}
+          DEEPSCOUT_GATE_ACTOR: github-actions:${{ github.actor }}
+        run: >
+          uv run python scripts/gate_experiment_release.py
+          --registry benchmark-results/release-gate/registry/registry.json
+          --candidate-id "$DEEPSCOUT_CANDIDATE_ID"
+          --actor "$DEEPSCOUT_GATE_ACTOR"
+          --output-dir benchmark-results/release-gate/gate
+
+      - name: Publish gate summary
+        if: ${{ always() && hashFiles('benchmark-results/release-gate/gate/release_gate.md') != '' }}
+        run: cat benchmark-results/release-gate/gate/release_gate.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload release-gate audit
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: deepscout-release-gate-audit
+          path: benchmark-results/release-gate
+          if-no-files-found: warn
+          retention-days: 14

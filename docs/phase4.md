@@ -1,6 +1,6 @@
 # Phase 4：Benchmark 与轨迹级评测
 
-Phase 4 分十二批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus 并加入 power/MDE 规划；第六批建立 Case 来源政策、人工 gold rubric 与 balance 审计；第七批把质量控制延伸到真实 Evidence 与人工双盲评审；第八批把 source compliance、human gold 与 reviewer agreement 接入 repeated/ablation 聚合，并加入 human-gold paired significance；第九批把整次实验封装为可校验 Experiment Bundle，并支持跨 bundle regression comparison；第十批建立 Experiment Registry/History、last-known-good baseline lineage 与长期趋势 dashboard；第十一批加入 Promotion/Retention 生命周期、人工 override 与安全资产保留策略；第十二批加入 policy-as-code Release Readiness/CI Gate，统一 Registry 完整性、Promotion eligibility 与 Retention preview。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实质量结论。
+Phase 4 分十三批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus 并加入 power/MDE 规划；第六批建立 Case 来源政策、人工 gold rubric 与 balance 审计；第七批把质量控制延伸到真实 Evidence 与人工双盲评审；第八批把 source compliance、human gold 与 reviewer agreement 接入 repeated/ablation 聚合，并加入 human-gold paired significance；第九批把整次实验封装为可校验 Experiment Bundle，并支持跨 bundle regression comparison；第十批建立 Experiment Registry/History、last-known-good baseline lineage 与长期趋势 dashboard；第十一批加入 Promotion/Retention 生命周期、人工 override 与安全资产保留策略；第十二批加入 policy-as-code Release Readiness/CI Gate，统一 Registry 完整性、Promotion eligibility 与 Retention preview；第十三批把 Gate 接入 artifact-driven GitHub Actions，可复用当前 run 或指定历史 run 的 Experiment Bundle artifact。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实质量结论。
 
 ## Benchmark Corpus
 
@@ -254,9 +254,21 @@ uv run python scripts/gate_experiment_release.py   --registry benchmark-results/
 
 安全边界是有意设计的：Release Gate 不暴露 manual override，也不调用 `apply_retention_plan()`；因此 CI 只能判断和生成预览，不能自行绕过发布政策或删除历史 bundle。需要人工例外或真实删除时，仍必须显式使用第十一批 Lifecycle CLI，并留下 actor/reason 或 apply 审计。
 
+## 第十三批：Artifact-driven GitHub Actions Gate
+
+`.github/workflows/release-gate.yml` 把 Release Gate 封装为 reusable workflow，同时支持 `workflow_call` 与 `workflow_dispatch`。输入 contract 只有候选 `experiment_id`、Bundle artifact 名和可选 `source_run_id`；workflow 不接受 override 或 retention apply 参数。
+
+当前 run 模式用于上游 benchmark/repeated job 在同一 workflow 上传 Bundle 后直接调用 Gate。历史 run 模式会显式传 `github-token + repository + run-id` 给 `actions/download-artifact`；手动触发要求 `source_run_id`，避免误以为当前空 run 自带实验资产。下载后的目录仍由 Registry 递归发现 manifest，因此 artifact 可以包含一个或多个 Bundle。
+
+Gate runner 使用生产依赖 `uv sync --frozen --no-dev`，随后执行 `build_experiment_registry.py` 与 `gate_experiment_release.py`。候选 ID 与 actor 通过环境变量传给 shell，避免 workflow input 直接形成命令注入面。输出目录会作为 `deepscout-release-gate-audit` 上传 14 天，并把 `release_gate.md` 追加到 GitHub Step Summary。
+
+主 `CI` 使用现有 synthetic history 做 artifact-boundary smoke：test job 生成 7 个 Bundle 并上传 1 天期 artifact，`release-gate-smoke` job 再通过 reusable workflow 下载并对 `b3` gate。这个 smoke 的目标是验证“跨 job artifact → Registry → Gate → audit artifact”的生产路径，而不是生成任何真实 Benchmark 结论。
+
+本地还做了独立 artifact round-trip：7 个 Bundle 经 ZIP 压缩/解压后放到全新目录，再在全新的 production-only venv 中重建 Registry；结果仍为 7 valid / 1 compatibility group，`b3` 为 `passed/promote`，证明 Gate 不依赖原测试目录或 dev dependency。
+
 ## 当前验证边界
 
-第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告；第六批验证 source/rubric 完整性、域名/freshness 策略与 Corpus balance guard；第七批验证 Evidence metadata、source-policy compliance、双评审 agreement 与 adjudication；第八批验证 sidecar 绑定、缺失值语义、profile/case 聚合、human-gold paired delta/significance 与报告产物；第九批验证 bundle hash/identity、tamper detection、compatibility gate、thresholded regression 与 CLI exit semantics；第十批验证多 bundle discovery、duplicate ID rejection、invalid exclusion、last-known-good lineage、history gate 与 dashboard 产物；第十一批验证 promotion policy、manual override、latest decision、stale decision rejection、retention lineage closure 与安全 apply；第十二批验证 strict/relaxed Registry integrity、accepted/regression release gate、policy-as-code、统一审计 artifact 与非破坏性 retention preview。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
+第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告；第六批验证 source/rubric 完整性、域名/freshness 策略与 Corpus balance guard；第七批验证 Evidence metadata、source-policy compliance、双评审 agreement 与 adjudication；第八批验证 sidecar 绑定、缺失值语义、profile/case 聚合、human-gold paired delta/significance 与报告产物；第九批验证 bundle hash/identity、tamper detection、compatibility gate、thresholded regression 与 CLI exit semantics；第十批验证多 bundle discovery、duplicate ID rejection、invalid exclusion、last-known-good lineage、history gate 与 dashboard 产物；第十一批验证 promotion policy、manual override、latest decision、stale decision rejection、retention lineage closure 与安全 apply；第十二批验证 strict/relaxed Registry integrity、accepted/regression release gate、policy-as-code、统一审计 artifact 与非破坏性 retention preview；第十三批验证 reusable workflow contract、当前/历史 run artifact 下载路径、production-only runtime、artifact round-trip 与 CI smoke orchestration。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
 
 真实 Provider + Tavily 仍因服务器缺少凭据而阻塞，因此当前只验证运行后质量聚合的 synthetic fixture，不提交伪造的真实来源合规率、人工 gold score、agreement 或显著性结论。
 

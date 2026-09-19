@@ -4,17 +4,49 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
         with:
           python-version: "3.11"
+          version: "latest-known"
       - name: Install
-        run: uv sync --group dev
+        run: uv sync --frozen --group dev
       - name: Ruff
         run: uv run ruff check .
       - name: Tests
         run: uv run pytest -q
+      - name: Build release-gate smoke bundles
+        run: |
+          rm -rf benchmark-results/ci-bundles
+          mkdir -p benchmark-results/ci-bundles
+          uv run python - <<'PY'
+          from pathlib import Path
+          from tests.test_experiment_lifecycle import _history
+
+          _history(Path("benchmark-results/ci-bundles"))
+          PY
+      - name: Upload release-gate smoke bundles
+        uses: actions/upload-artifact@v7
+        with:
+          name: deepscout-experiment-bundles-smoke
+          path: benchmark-results/ci-bundles
+          if-no-files-found: error
+          retention-days: 1
+
+  release-gate-smoke:
+    needs: test
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/release-gate.yml
+    with:
+      candidate_id: b3
+      artifact_name: deepscout-experiment-bundles-smoke
