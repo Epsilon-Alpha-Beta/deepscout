@@ -78,7 +78,7 @@ def render_significance_markdown(report: SignificanceReport) -> str:
     impossible = [
         item
         for item in global_rows
-        if item.minimum_attainable_p > report.alpha or item.minimum_attainable_holm_p > report.alpha
+        if item.minimum_attainable_p > report.alpha or item.minimum_reportable_holm_p > report.alpha
     ]
     lines.extend(["", "## Resolution limits", ""])
     if impossible:

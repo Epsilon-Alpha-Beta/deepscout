@@ -177,3 +177,51 @@ def test_significance_validation_rejects_bad_alpha():
     )
     with pytest.raises(ValueError, match="alpha"):
         build_significance_report(empty, alpha=1.0)
+
+
+def test_resolution_markdown_handles_raw_reachable_but_holm_unreachable():
+    from deepscout.evaluation.significance import (
+        SignificanceReport,
+        apply_multiple_corrections,
+        build_paired_comparison,
+    )
+    from deepscout.evaluation.significance_report import render_significance_markdown
+
+    comparisons = [
+        build_paired_comparison(
+            scope="profile_across_cases",
+            profile=f"p{i}",
+            baseline_profile="full",
+            case_id=None,
+            metric="quality_proxy_score",
+            current=[2.0] * 6,
+            baseline=[1.0] * 6,
+            differences=[1.0] * 6,
+            alpha=0.05,
+            exact_max_pairs=16,
+            permutation_resamples=100,
+            permutation_seed=7,
+        )
+        for i in range(5)
+    ]
+    apply_multiple_corrections(comparisons, alpha=0.05)
+    assert comparisons[0].minimum_attainable_p == pytest.approx(0.03125)
+    assert comparisons[0].minimum_reportable_holm_p == pytest.approx(0.15625)
+    report = SignificanceReport(
+        matrix_name="m",
+        matrix_version="1",
+        corpus_name="c",
+        corpus_version="1",
+        repetitions=1,
+        generated_at="2026-09-19T00:00:00+00:00",
+        baseline_profile="full",
+        alpha=0.05,
+        exact_permutation_max_pairs=16,
+        permutation_resamples=100,
+        permutation_seed=7,
+        minimum_nonzero_pairs_for_holm=8,
+        comparisons=comparisons,
+    )
+    markdown = render_significance_markdown(report)
+    assert "Resolution limits" in markdown
+    assert "0.1562" in markdown

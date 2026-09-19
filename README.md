@@ -13,9 +13,9 @@ DeepScout 参考 LangChain `deepagents/examples/deep_research` 的架构思路�
 - Critic 驱动的信息缺口分析与有界重规划；
 - 仅基于已收集证据生成最终报告。
 
-> 当前版本为 **v0.4.6 / Phase 4 第七批运行后来源合规与人工盲评**：保留 Benchmark/Ablation/Repeated/Significance/Power/Case-QC 基座，
-> 新增 Evidence 来源元数据、source-policy compliance、双人盲评、Cohen κ / quadratic weighted κ 与 adjudication 工作流。
-> 真实 LLM Provider + Tavily 仍缺少凭据，因此不提交伪造的真实来源合规率、人工 gold 分数或 agreement 结论。
+> 当前版本为 **v0.4.7 / Phase 4 第八批运行后质量聚合与人工 Gold 显著性分析**：保留 Benchmark/Ablation/Repeated/Significance/Power/Case-QC/Review 基座，
+> 新增基于 `(profile, repetition, case_id)` 的质量 sidecar 聚合，把 source compliance、human gold 与 reviewer agreement 接入 repeated/ablation 统计，并支持 human-gold paired significance。
+> 真实 LLM Provider + Tavily 仍缺少凭据，因此当前只验证 synthetic 质量聚合管线，不提交伪造的真实合规率、人工 gold 分数或显著性结论。
 
 ## 系统架构
 
@@ -278,13 +278,25 @@ Evidence 新增 `source_class / published_at / retrieved_at`。`web_search` 程�
 
 工程 `quality_proxy_score`、自动 source-policy compliance 与人工 gold score 始终保持三条独立指标轴。真实运行后的合规率和人工评分仍需等真实 Provider Evidence 产生后执行。
 
+## Phase 4 第八批：运行后质量聚合与 Human Gold 显著性
+
+原始 `BenchmarkRunResult` 与 `RepeatedRunRecord` 保持不可变；来源合规和人工盲评作为 sidecar 通过 `(profile, repetition, case_id)` 绑定。`BlindReviewAssignment` 是私有映射，只负责把匿名 `blind_item_id` 映射回实验单元，不进入 reviewer packet，因此 packet 仍不暴露 profile/model/provider/repetition。
+
+新增 `RuntimeQualityAggregateReport`，按 profile 与 profile×case 聚合 source observation coverage、freshness 可评估率、source compliance rate、human review coverage、human gold mean/CI/pass rate，以及 reviewer pass agreement、Cohen κ 与 quadratic weighted κ。`unverifiable` freshness 不会计为 source failure；未评审、待仲裁或失败 run 也不会被填成 0。
+
+Human gold paired delta 使用与 repeated 层一致的同 `(repetition, case)` 配对规则；全局显著性先在每个 Case 内对 repetitions 求 paired mean，再跨 Case 做 sign-flip / Wilcoxon / Cohen dz / Holm-BH，避免把 case×repetition 误当成独立样本。只使用 `status=completed` 且 profile/baseline 都有 resolved final gold score 的配对单元。
+
+新增 `scripts/aggregate_runtime_quality.py`，读取 `repeated.json`、source observation sidecar、private review assignment 与 human review audit，输出 `quality_aggregate.json / quality_aggregate.md / quality_observations.csv / quality_statistics.csv / human_gold_deltas.csv`、SVG 图表以及可选 `human_gold_significance.*`。
+
+第八批还修复了显著性 Markdown 的一个历史边界：当 raw exact p 已可达但 Holm 分辨率仍不可达时，报告现在正确使用 `minimum_reportable_holm_p`，不会访问不存在的旧字段。
+
 ## 当前验证状态
 
-Phase 4 第七批当前代码已在项目隔离环境中完成验证：
+Phase 4 第八批当前代码已在项目隔离环境中完成验证：
 
 - DeepScout 专属 Python：3.11.16；
 - 系统 Python：保持 3.10.12，不受影响；
-- `pytest`：100/100 通过（真实 Redis，无 skip；覆盖 Case QC、Evidence metadata、source compliance、双人盲评与 adjudication）；
+- `pytest`：104/104 通过（真实 Redis，无 skip；覆盖 runtime quality aggregate、human-gold paired significance 与历史回归）；
 - `ruff check .`：通过；
 - LangGraph：可成功编译为 `CompiledStateGraph`；
 - PostgreSQL：真实跨进程 pause/resume 与严格 MsgPack 模式恢复通过；
@@ -300,4 +312,4 @@ Phase 4 第七批当前代码已在项目隔离环境中完成验证：
 
 **Phase 3 剩余**：补齐真实 LLM Provider + Tavily 端到端联调；可选继续做真实 OpenTelemetry Collector 网络链路与 Compose runtime 联调。
 
-**Phase 4 后续**：真实 Provider 凭据可用后先做低成本 Evidence/source-compliance smoke，再对同一 blind item 做独立双评审与必要 adjudication；将真实来源合规率、人工 gold score 与现有统计链合并，并用真实 paired variance 重新估计 power/MDE。
+**Phase 4 后续**：真实 Provider 凭据可用后先做低成本 end-to-end quality smoke；产出真实 Evidence、双盲 review 与 adjudication sidecar 后直接运行 quality aggregate，再将真实 human-gold paired variance 回填 power/MDE。

@@ -65,6 +65,19 @@ from deepscout.evaluation.quality import (
     BenchmarkQualitySnapshot,
     audit_benchmark_corpus,
 )
+from deepscout.evaluation.quality_aggregate import (
+    BlindReviewAssignment,
+    QualityDeltaStatistics,
+    QualityScopeStatistics,
+    RuntimeQualityAggregateReport,
+    RuntimeQualityObservation,
+    SourceQualityObservation,
+    build_runtime_quality_aggregate,
+)
+from deepscout.evaluation.quality_aggregate_report import (
+    render_runtime_quality_markdown,
+    save_runtime_quality_aggregate,
+)
 from deepscout.evaluation.quality_report import (
     render_quality_markdown,
     save_quality_report,
@@ -96,7 +109,9 @@ from deepscout.evaluation.runtime_quality_report import (
 from deepscout.evaluation.significance import (
     SignificanceComparison,
     SignificanceReport,
+    apply_multiple_corrections,
     benjamini_hochberg_adjust,
+    build_paired_comparison,
     build_significance_report,
     cliffs_delta,
     cohen_dz,
@@ -218,4 +233,15 @@ __all__ = [
     "save_human_review_audit",
     "save_source_compliance_report",
     "score_source_policy",
+    "BlindReviewAssignment",
+    "QualityDeltaStatistics",
+    "QualityScopeStatistics",
+    "RuntimeQualityAggregateReport",
+    "RuntimeQualityObservation",
+    "SourceQualityObservation",
+    "build_runtime_quality_aggregate",
+    "render_runtime_quality_markdown",
+    "save_runtime_quality_aggregate",
+    "apply_multiple_corrections",
+    "build_paired_comparison",
 ]

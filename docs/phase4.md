@@ -1,6 +1,6 @@
 # Phase 4：Benchmark 与轨迹级评测
 
-Phase 4 分七批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus 并加入 power/MDE 规划；第六批建立 Case 来源政策、人工 gold rubric 与 balance 审计；第七批把质量控制延伸到真实 Evidence 与人工双盲评审。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实质量结论。
+Phase 4 分八批推进：第一批建立 Benchmark/trajectory 基座；第二批加入 Ablation Matrix；第三批加入重复实验与 bootstrap 统计；第四批加入配对显著性检验、效应量和多重比较校正；第五批扩充 Core Corpus 并加入 power/MDE 规划；第六批建立 Case 来源政策、人工 gold rubric 与 balance 审计；第七批把质量控制延伸到真实 Evidence 与人工双盲评审；第八批把 source compliance、human gold 与 reviewer agreement 接入 repeated/ablation 聚合，并加入 human-gold paired significance。当前仍不会在缺少真实 Provider/Tavily 凭据时伪造真实质量结论。
 
 ## Benchmark Corpus
 
@@ -196,11 +196,21 @@ Evidence schema 增加 `source_class / published_at / retrieved_at`。`web_searc
 
 `review_benchmark.py prepare` 生成盲评包；`review_benchmark.py audit` 汇总 reviewer/adjudicator JSON，并输出 `human_review_audit.json / human_review_audit.md / human_review_outcomes.csv`。工程 proxy、自动 source compliance 和人工 gold score 是三条独立指标轴，不相互冒充。
 
+## 第八批：运行后质量聚合与 Human Gold 显著性
+
+质量数据采用 sidecar 设计：原始 repeated run 不被人工评审结果回写。`SourceQualityObservation` 和私有 `BlindReviewAssignment` 以 `(profile, repetition, case_id)` 对齐运行单元；匿名 review packet 本身继续不包含 profile/model/provider/repetition。sidecar 若引用不存在的 run、重复绑定同一 run 或出现未知 blind item 会直接拒绝。
+
+`RuntimeQualityAggregateReport` 同时输出 profile 与 profile×case 的 source observation coverage、source evaluable rate、source compliance rate、human review coverage、human gold pass rate、human gold score 分布以及 reviewer agreement。缺失值语义严格保留：freshness `unverifiable` 不算失败，未评审/待仲裁不填 0，失败 run 不进入 paired significance。
+
+Human gold paired delta 按同一 `(repetition, case)` 计算。全局 `profile_across_cases` 推断先在 Case 内聚合 repetitions，再跨 Case 使用现有 sign-flip、Wilcoxon、Cohen dz、rank-biserial、Cliff delta 与 Holm/BH；因此仍以 Case 为全局统计单元。
+
+CLI：`uv run python scripts/aggregate_runtime_quality.py --repeated <repeated.json> ...`。输出包括 `quality_aggregate.json / quality_aggregate.md / quality_observations.csv / quality_statistics.csv / human_gold_deltas.csv`、`charts/source_policy_pass.svg`、`charts/human_gold_score.svg`、`charts/delta_human_gold_score.svg`，以及有足够 paired gold 数据时的 `human_gold_significance.json/csv/md`。
+
 ## 当前验证边界
 
-第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告；第六批验证 source/rubric 完整性、域名/freshness 策略与 Corpus balance guard；第七批验证 Evidence metadata、source-policy compliance、双评审 agreement 与 adjudication。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
+第一批使用 synthetic final-state 与 fake streamed graph 验证指标和轨迹；第二批使用 synthetic profile graph 验证 Settings/Graph 消融语义；第三批使用可控重复 synthetic graph 验证重复统计；第四批用可手算 paired fixture 验证 exact sign-flip、Wilcoxon、Cohen’s dz、rank-biserial、Cliff’s delta、Holm/BH 与分辨率；第五批验证 20-case Corpus 多样性、exact-Holm 可达性、paired-normal power/MDE 单调性和规划报告；第六批验证 source/rubric 完整性、域名/freshness 策略与 Corpus balance guard；第七批验证 Evidence metadata、source-policy compliance、双评审 agreement 与 adjudication；第八批验证 sidecar 绑定、缺失值语义、profile/case 聚合、human-gold paired delta/significance 与报告产物。这些 fixture 只证明实验基础设施正确，不代表真实 Provider 的 Benchmark/Ablation/统计成绩。
 
-真实 Provider + Tavily 仍因服务器缺少凭据而阻塞，因此当前只验证运行后质量管线的 synthetic fixture，不提交伪造的真实来源合规率、人工 gold score 或 agreement 结论。
+真实 Provider + Tavily 仍因服务器缺少凭据而阻塞，因此当前只验证运行后质量聚合的 synthetic fixture，不提交伪造的真实来源合规率、人工 gold score、agreement 或显著性结论。
 
 ## 后续批次
 

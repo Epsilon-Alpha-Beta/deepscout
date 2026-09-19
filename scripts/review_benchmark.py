@@ -11,6 +11,7 @@ from deepscout.evaluation.human_review import (
     HumanGoldReview,
     build_blind_packet,
 )
+from deepscout.evaluation.quality_aggregate import BlindReviewAssignment
 from deepscout.evaluation.review_audit import build_human_review_audit
 from deepscout.evaluation.runner import load_corpus
 from deepscout.evaluation.runtime_quality_report import save_human_review_audit
@@ -41,6 +42,19 @@ def _prepare(args) -> int:
     packet = build_blind_packet(case, response, blind_item_id=args.blind_item_id)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(packet.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    if args.assignment_output is not None:
+        if args.profile is None or args.repetition is None:
+            raise ValueError("--assignment-output 需要同时提供 --profile 和 --repetition。")
+        assignment = BlindReviewAssignment(
+            blind_item_id=packet.blind_item_id,
+            repetition=args.repetition,
+            profile=args.profile,
+            case_id=packet.case_id,
+        )
+        args.assignment_output.parent.mkdir(parents=True, exist_ok=True)
+        args.assignment_output.write_text(
+            assignment.model_dump_json(indent=2) + "\n", encoding="utf-8"
+        )
     print(f"blind_item_id={packet.blind_item_id} case={packet.case_id} output={args.output}")
     return 0
 
@@ -75,6 +89,9 @@ def main() -> int:
     prepare.add_argument("--case-id", required=True)
     prepare.add_argument("--response-file", type=Path, required=True)
     prepare.add_argument("--blind-item-id", default=None)
+    prepare.add_argument("--profile", default=None)
+    prepare.add_argument("--repetition", type=int, default=None)
+    prepare.add_argument("--assignment-output", type=Path, default=None)
     prepare.add_argument("--output", type=Path, required=True)
     prepare.set_defaults(handler=_prepare)
 

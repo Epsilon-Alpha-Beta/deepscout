@@ -270,7 +270,7 @@ def _case_mean_pairs(
     return current, baseline, differences
 
 
-def _comparison(
+def build_paired_comparison(
     *,
     scope: SignificanceScope,
     profile: str,
@@ -318,7 +318,7 @@ def _comparison(
     )
 
 
-def _apply_multiple_corrections(
+def apply_multiple_corrections(
     comparisons: list[SignificanceComparison],
     *,
     alpha: float,
@@ -373,7 +373,7 @@ def build_significance_report(
         for metric in available_metrics:
             current, baseline, differences = _case_mean_pairs(report, profile, metric)
             comparisons.append(
-                _comparison(
+                build_paired_comparison(
                     scope="profile_across_cases",
                     profile=profile,
                     baseline_profile=report.baseline_profile,
@@ -392,7 +392,7 @@ def build_significance_report(
             for metric in available_metrics:
                 current, baseline, differences = _paired_values(report, profile, metric, case_id)
                 comparisons.append(
-                    _comparison(
+                    build_paired_comparison(
                         scope="profile_case",
                         profile=profile,
                         baseline_profile=report.baseline_profile,
@@ -408,7 +408,7 @@ def build_significance_report(
                     )
                 )
 
-    _apply_multiple_corrections(comparisons, alpha=alpha)
+    apply_multiple_corrections(comparisons, alpha=alpha)
     family_size = max(1, len(profiles))
     minimum_pairs = minimum_units_for_exact_holm(alpha, family_size)
     return SignificanceReport(

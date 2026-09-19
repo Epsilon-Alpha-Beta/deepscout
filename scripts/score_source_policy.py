@@ -7,6 +7,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from deepscout.evaluation.quality_aggregate import SourceQualityObservation
 from deepscout.evaluation.runner import load_corpus
 from deepscout.evaluation.runtime_quality_report import save_source_compliance_report
 from deepscout.evaluation.source_compliance import score_source_policy
@@ -28,6 +29,9 @@ def main() -> int:
     parser.add_argument("--case-id", required=True)
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--evaluated-at", default=None)
+    parser.add_argument("--profile", default=None)
+    parser.add_argument("--repetition", type=int, default=None)
+    parser.add_argument("--observation-output", type=Path, default=None)
     parser.add_argument(
         "--output-dir", type=Path, default=Path("benchmark-results/source-compliance-latest")
     )
@@ -40,6 +44,19 @@ def main() -> int:
     evaluated_at = datetime.fromisoformat(args.evaluated_at) if args.evaluated_at else None
     report = score_source_policy(case, _load_evidence(args.evidence), evaluated_at=evaluated_at)
     paths = save_source_compliance_report(report, args.output_dir)
+    if args.observation_output is not None:
+        if args.profile is None or args.repetition is None:
+            parser.error("--observation-output 需要同时提供 --profile 和 --repetition。")
+        observation = SourceQualityObservation(
+            repetition=args.repetition,
+            profile=args.profile,
+            case_id=case.case_id,
+            report=report,
+        )
+        args.observation_output.parent.mkdir(parents=True, exist_ok=True)
+        args.observation_output.write_text(
+            observation.model_dump_json(indent=2) + "\n", encoding="utf-8"
+        )
     states = {item.status for item in report.checks}
     print(
         f"case={case.case_id} passed={str(report.passed).lower()} "
